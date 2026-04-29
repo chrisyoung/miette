@@ -140,7 +140,7 @@ while true; do
 
   # Consolidation sweep every 60 ticks.
   if [ "$((loop_count % 60))" = "0" ]; then
-    "$CONCEPTION/consolidate.sh" >> /tmp/consolidate.log 2>&1
+    "$DIR/consolidate.sh" >> /tmp/consolidate.log 2>&1
   fi
 
   # ── Gap 3: cross-aggregate awareness snapshot ───────────────
@@ -184,18 +184,18 @@ while true; do
   # ── Gap 4: wake-hook detection ──────────────────────────────
   prev_state=$(cat "$INFO/.prev_consciousness_state" 2>/dev/null)
   if [ "$prev_state" = "sleeping" ] && [ "$state" != "sleeping" ] && [ -n "$state" ]; then
-    "$CONCEPTION/interpret_dream.sh" >> /tmp/interpret_dream.log 2>&1 &
+    "$DIR/interpret_dream.sh" >> /tmp/interpret_dream.log 2>&1 &
     "$CONCEPTION/capabilities/wake_report/wake_report.sh" >> /tmp/wake_report.log 2>&1 &
-    [ -x "$CONCEPTION/wake_review.sh" ] && "$CONCEPTION/wake_review.sh" >> /tmp/wake_review.log 2>&1 &
+    [ -x "$DIR/wake_review.sh" ] && "$DIR/wake_review.sh" >> /tmp/wake_review.log 2>&1 &
   fi
   [ -n "$state" ] && echo "$state" > "$INFO/.prev_consciousness_state"
 
   # Musing surface + mint + daydream — capability cluster owns
   # cadence ; daemon delegates. Retires when capabilities/musings
   # absorbs its own loop driver.
-  "$CONCEPTION/surface_musing.sh" "$loop_count" 2>/dev/null
+  "$DIR/surface_musing.sh" "$loop_count" 2>/dev/null
   if [ "$((RANDOM % 300))" = "0" ]; then
-    "$CONCEPTION/mint_musing.sh" >> /tmp/mint_musing.log 2>&1 &
+    "$DIR/mint_musing.sh" >> /tmp/mint_musing.log 2>&1 &
   fi
 
   idle=$($HECKS heki seconds-since "$INFO/heartbeat.heki" updated_at 2>/dev/null)
@@ -206,7 +206,7 @@ while true; do
     nowsec=$(date +%s)
     if [ "$((nowsec - last))" -ge 60 ]; then
       echo "$nowsec" > "$stamp"
-      "$CONCEPTION/daydream.sh" >> /tmp/daydream.log 2>&1 &
+      "$DIR/daydream.sh" >> /tmp/daydream.log 2>&1 &
     fi
   fi
 
