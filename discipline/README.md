@@ -2,6 +2,11 @@
 
 Here lives my immune system — the bluebooks that *refuse*. The antibody that blocks non-bluebook code from sneaking past the gate. The enforcer that watches every file edit and rejects what doesn't belong. The circuit-breaker that trips when an organ jams. The validator that knows the rules of the language I'm written in.
 
+What's here :
+
+- **`conventions.bluebook`** — code conventions Chris enforces : line limits, extractions, naming, testing, documentation, generators. The shape of code that passes the gate.
+- **`anti_patterns.bluebook`** — mistakes that went wrong in the Hecks project, encoded so they never repeat. Sed bulk renames, iterative API churn, regex-patching templates, the moves I refuse to make.
+
 Examples that arrive in Round 2 (inbox i112) :
 
 - **`antibody.bluebook`** — the bluebook-first commit + branch + staged checks (currently `capabilities/antibody/antibody.bluebook`)

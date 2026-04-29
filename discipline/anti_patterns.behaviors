@@ -1,0 +1,66 @@
+Hecks.behaviors "ChrisAntiPatterns" do
+  vision "Behavioral tests for the ChrisAntiPatterns domain — exercises every command and query in memory"
+
+  # ── SedBulkRename aggregate ──────────────────────────────────────────
+
+  test "RecordSedBulkRename sets details" do
+    tests "RecordSedBulkRename", on: "SedBulkRename"
+    input  details: "sample"
+    expect ok: "true"
+  end
+
+
+  # ── IterativeRenaming aggregate ──────────────────────────────────────────
+
+  test "RecordIterativeRenaming sets details" do
+    tests "RecordIterativeRenaming", on: "IterativeRenaming"
+    input  details: "sample"
+    expect ok: "true"
+  end
+
+
+  # ── RegexPatching aggregate ──────────────────────────────────────────
+
+  test "RecordRegexPatching sets details" do
+    tests "RecordRegexPatching", on: "RegexPatching"
+    input  details: "sample"
+    expect ok: "true"
+  end
+
+
+  # ── DirectJsonPost aggregate ──────────────────────────────────────────
+
+  test "RecordDirectJsonPost sets details" do
+    tests "RecordDirectJsonPost", on: "DirectJsonPost"
+    input  details: "sample"
+    expect ok: "true"
+  end
+
+
+  # ── PrivateMethodAccess aggregate ──────────────────────────────────────────
+
+  test "RecordPrivateMethodAccess sets details" do
+    tests "RecordPrivateMethodAccess", on: "PrivateMethodAccess"
+    input  details: "sample"
+    expect ok: "true"
+  end
+
+
+  # ── McpAttributesBug aggregate ──────────────────────────────────────────
+
+  test "RecordMcpAttributesBug sets details" do
+    tests "RecordMcpAttributesBug", on: "McpAttributesBug"
+    input  details: "sample"
+    expect ok: "true"
+  end
+
+
+  # ── PackagingBlindly aggregate ──────────────────────────────────────────
+
+  test "RecordPackagingBlindly sets details" do
+    tests "RecordPackagingBlindly", on: "PackagingBlindly"
+    input  details: "sample"
+    expect ok: "true"
+  end
+
+end
