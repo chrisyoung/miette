@@ -110,6 +110,7 @@ else
   # reference_to so dispatch would singleton-upsert). Birth strength 0.3
   # leaves headroom above the 0.1 compost threshold.
   "$HECKS" heki append "$INFO/synapse.heki" \
+    --reason "pulse_organs : birth a new synapse for the topic just carried" \
     from="$carrying" to="$carrying" strength=0.3 \
     state=alive firings=0 last_fired_at="$now" >/dev/null 2>&1
 fi
@@ -134,6 +135,7 @@ while IFS='|' read -r sid will_compost cur_strength firings from_topic; do
   if [ "$will_compost" = "true" ]; then
     "$HECKS" "$AGG" Synapse.Compost synapse="$sid" >/dev/null 2>&1
     "$HECKS" heki append "$INFO/remains.heki" \
+      --reason "pulse_organs : capture composted synapse's dying values for the remains corpus" \
       from_synapse="$from_topic" \
       strength_at_death="$cur_strength" \
       firings="$firings" \
@@ -144,9 +146,13 @@ while IFS='|' read -r sid will_compost cur_strength firings from_topic; do
 done <<<"$DECAY_PLAN"
 
 # ── Fire signals: one somatic + one concept ──────────────────────────
+# Direct heki append (FireSignal has no reference_to so dispatch would
+# singleton-upsert) — each tick must produce a distinct signal record.
 "$HECKS" heki append "$INFO/signal.heki" \
+  --reason "pulse_organs : per-tick somatic signal — body says it's alive" \
   kind=somatic payload=pulse strength=0.5 access_count=0 created_at="$now" >/dev/null 2>&1
 "$HECKS" heki append "$INFO/signal.heki" \
+  --reason "pulse_organs : per-tick concept signal — body carries the current topic" \
   kind=concept payload="$carrying" strength=0.5 access_count=0 created_at="$now" >/dev/null 2>&1
 
 # ── Archive cold signals: access_count <= 3 AND age > 20s ────────────

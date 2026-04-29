@@ -117,4 +117,5 @@ prefix="🧠"
 # the consolidation detail (sleep.bluebook's Advance* commands set
 # short phase-transition strings; this overrides during the phase).
 "$HECKS" heki upsert "$INFO/consciousness.heki" \
+  --reason "nrem_branch : overlay consolidation narrative onto sleep_summary so the statusline tells what the body is actually doing during NREM" \
   id="$cid" sleep_summary="$narrative" >/dev/null 2>&1

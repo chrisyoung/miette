@@ -545,8 +545,11 @@ english_image="$(translate_to_english "$french_image")"
 
 # Append FRENCH to dream_state.heki — authentic corpus record.
 # interpret_dream.sh reads this ; keeping it French preserves the
-# dreaming voice for post-wake interpretation.
+# dreaming voice for post-wake interpretation. Direct heki append
+# (no dispatch path) because there's no DreamState aggregate to
+# dispatch through — the corpus is the substrate, not the model.
 "$HECKS" heki append "$INFO/dream_state.heki" \
+  --reason "rem_branch : authentic French dream image, corpus record for wake interpretation" \
   dream_images="$french_image" cycle="$LOOP" source="mindstream" >/dev/null 2>&1
 
 # Dispatch DreamPulse with ENGLISH translation — status bar narrates
