@@ -77,6 +77,7 @@ if [ -f "$INFO/signal.heki" ]; then
   while IFS='|' read -r sid kind payload created_at; do
     [ -z "$sid" ] && continue
     "$HECKS" heki append "$INFO/store.heki" \
+      --reason "consolidate : promote a hot signal into long-term memory" \
       kind="$kind" payload="$payload" source=signal \
       created_at="$created_at" >/dev/null 2>&1
     "$HECKS" "$AGG" Signal.ArchiveSignal signal="$sid" >/dev/null 2>&1
@@ -105,6 +106,7 @@ if [ -f "$INFO/synapse.heki" ]; then
     [ -z "$sid" ] && continue
     "$HECKS" "$AGG" Synapse.Compost synapse="$sid" >/dev/null 2>&1
     "$HECKS" heki append "$INFO/remains.heki" \
+      --reason "consolidate : capture composted synapse's dying values for the remains corpus" \
       from_synapse="$from_topic" \
       strength_at_death="$strength" \
       firings="$firings" \
@@ -149,11 +151,13 @@ if [ -f "$INFO/musing.heki" ]; then
   while IFS='|' read -r mid idea source concept; do
     [ -z "$mid" ] && continue
     "$HECKS" heki append "$INFO/musing_archive.heki" \
+      --reason "consolidate : archive duplicate-concept musing — keep the older, retire the rest" \
       idea="$idea" source="$source" concept="$concept" \
       archived_reason="duplicate_concept" archived_at="$now" >/dev/null 2>&1
     # Mark the original musing archived so it's not re-counted next sweep.
     "$HECKS" heki mark "$INFO/musing.heki" --where "id=$mid" \
-      --set status=archived >/dev/null 2>&1
+      --set status=archived \
+      --reason "consolidate : flag the original musing archived so duplicate-concept sweep doesn't re-count it" >/dev/null 2>&1
     archived_musings=$((archived_musings + 1))
   done <<<"$ARCHIVE_PLAN"
 fi

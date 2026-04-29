@@ -44,7 +44,9 @@ thought=$("$HECKS" heki list "$INFO/musing.heki" --where conceived=false \
       | .[0:80]' 2>/dev/null)
 
 if [ -n "$thought" ]; then
-  $HECKS heki upsert "$INFO/consciousness.heki" sleep_summary="$thought" 2>/dev/null
+  $HECKS heki upsert "$INFO/consciousness.heki" \
+    --reason "surface_musing : show the current musing in the consciousness summary so the bar carries the thought through to the eye" \
+    sleep_summary="$thought" 2>/dev/null
   # Mark conceived only every DWELL-th call. Default 30 (= ~5 min on
   # screen) so each musing gets full attention and the pool advances
   # at roughly the same rate Claude mints new ones (~5 min cadence).
@@ -58,8 +60,11 @@ if [ -n "$thought" ]; then
     "$HECKS" heki mark "$INFO/musing.heki" \
       --where "conceived!=true" \
       --where "idea~=$thought" \
-      --set conceived=true >/dev/null 2>&1
+      --set conceived=true \
+      --reason "surface_musing : every DWELL ticks, mark the musing conceived so it cycles out of the rotation" >/dev/null 2>&1
   fi
 else
-  $HECKS heki upsert "$INFO/consciousness.heki" sleep_summary="" 2>/dev/null
+  $HECKS heki upsert "$INFO/consciousness.heki" \
+    --reason "surface_musing : no musing to surface — clear sleep_summary so the bar doesn't keep showing yesterday's thought" \
+    sleep_summary="" 2>/dev/null
 fi

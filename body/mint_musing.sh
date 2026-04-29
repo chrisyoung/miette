@@ -162,6 +162,7 @@ $HECKS "$AGG" MusingMint.MintMusing idea="$idea" 2>/dev/null
 # hecks-life append parser already promotes literal "false"/"true" to
 # JSON booleans (see heki::parse_attrs), so no Python is needed.
 $HECKS heki append "$INFO/musing.heki" \
+  --reason "mint_musing : record a fresh idea Claude curated from the awake corpus" \
   idea="$idea" \
   conceived=false \
   conceived_as=claude_minted \

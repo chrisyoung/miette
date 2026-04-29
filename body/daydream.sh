@@ -94,6 +94,7 @@ duration=$(( $(date -u +%s) - start_epoch ))
   impressions="$impression" duration_seconds="$duration" \
   connections_found=1 >/dev/null 2>&1
 "$HECKS" heki append "$INFO/daydream.heki" \
+  --reason "daydream : keep wandering history alongside dispatch — RecordDaydream is singleton-upsert without reference_to" \
   impressions="$impression" duration_seconds="$duration" \
   connections_found=1 wandered_at="$now" >/dev/null 2>&1
 
@@ -102,6 +103,7 @@ duration=$(( $(date -u +%s) - start_epoch ))
 # pattern used elsewhere (pulse_organs.sh:138) for multi-record
 # aggregates. Birth strength 0.5 matches the task spec.
 "$HECKS" heki append "$INFO/synapse.heki" \
+  --reason "daydream : forge a new cross-domain bond as a forming synapse" \
   from="$A_NAME" to="$B_NAME" strength=0.5 \
   state=forming firings=0 last_fired_at="$now" >/dev/null 2>&1
 
