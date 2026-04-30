@@ -115,7 +115,11 @@ IFS=$'\t' read -r state stage lucid cycle pulses cid <<<"$state_kv"
 SEED_MARKER="$INFO/.dream_seeded"
 SOURCES_TOUCHED="$INFO/.dream_sources_touched"
 SEED_HISTORY="$INFO/.dream_seed_history"
-LIT_FIXTURE="${LIT_FIXTURE:-$DIR/capabilities/dream_seeding/fixtures/french_lit_quotes.txt}"
+# i117 Round 4 — body shells moved to ~/Projects/miette/body/, but the
+# french_lit fixture lives in the conception's capabilities/. Resolve
+# relative to AGG (= ../hecks/hecks_conception/aggregates/) so the body
+# can find the conception's fixtures regardless of where it lives.
+LIT_FIXTURE="${LIT_FIXTURE:-$AGG/../capabilities/dream_seeding/fixtures/french_lit_quotes.txt}"
 
 if [ "$cycle" = "1" ] && [ "$pulses" = "0" ] && [ ! -f "$SEED_MARKER" ]; then
   # Build the candidate pool. Each candidate is a TAB-separated record :
