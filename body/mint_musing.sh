@@ -15,7 +15,7 @@
 #  terminal_capability_wiring plan).]
 
 DIR="$(dirname "$0")"
-HECKS="$DIR/../hecks_life/target/release/hecks-life"
+HECKS="$DIR/../rust/target/release/hecks-life"
 INFO="${HECKS_INFO:-$DIR/information}"
 AGG="$DIR/aggregates"
 

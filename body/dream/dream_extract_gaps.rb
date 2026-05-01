@@ -40,7 +40,7 @@ require "open3"
 
 REPO_ROOT = File.expand_path("../..", __dir__)
 
-HECKS  = ENV["HECKS_BIN"]  || File.join(REPO_ROOT, "hecks_life/target/release/hecks-life")
+HECKS  = ENV["HECKS_BIN"]  || File.join(REPO_ROOT, "rust/target/release/hecks-life")
 INFO   = ENV["HECKS_INFO"] || "/Users/christopheryoung/Projects/miette-state/information"
 CLAUDE = ENV["CLAUDE_BIN"] || File.expand_path("~/.local/bin/claude")
 

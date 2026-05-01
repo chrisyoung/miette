@@ -26,7 +26,7 @@
 set -u
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
-HECKS="${HECKS:-$DIR/../hecks_life/target/release/hecks-life}"
+HECKS="${HECKS:-$DIR/../rust/target/release/hecks-life}"
 INFO="${INFO:-${HECKS_INFO:-$DIR/information}}"
 [ -n "${HECKS_INFO:-}" ] && INFO="$HECKS_INFO"
 AGG="${AGG:-$DIR/aggregates}"

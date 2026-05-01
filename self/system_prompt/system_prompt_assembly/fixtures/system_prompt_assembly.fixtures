@@ -17,7 +17,7 @@ Hecks.fixtures "SystemPromptAssembly" do
   #   tests_block      — emit the `#[cfg(test)] mod tests { … }` snippet
   #                       verbatim, raw read
   #
-  # See hecks_life/src/specializer/run_boot/system_prompt.rs for the
+  # See rust/src/specializer/run_boot/system_prompt.rs for the
   # one-arm-per-body_kind dispatcher.
 
   # ── Section — ordered chunks of the emitted file ─────────────────

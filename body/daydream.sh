@@ -31,7 +31,7 @@ set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
 INFO="${HECKS_INFO:-$DIR/information}"
 AGG="${HECKS_AGG:-$DIR/aggregates}"
-HECKS="${HECKS_BIN:-$DIR/../hecks_life/target/release/hecks-life}"
+HECKS="${HECKS_BIN:-$DIR/../rust/target/release/hecks-life}"
 NURSERY="${HECKS_NURSERY:-$DIR/nursery}"
 
 now=$(date -u +%Y-%m-%dT%H:%M:%SZ)

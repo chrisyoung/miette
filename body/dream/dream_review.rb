@@ -168,7 +168,7 @@ class DreamReview
     tmp&.unlink
   end
 
-  HECKS = ENV["HECKS_BIN"] || File.join(REPO_ROOT, "hecks_life/target/release/hecks-life")
+  HECKS = ENV["HECKS_BIN"] || File.join(REPO_ROOT, "rust/target/release/hecks-life")
 
   def skip_edit(gap, reason)
     {

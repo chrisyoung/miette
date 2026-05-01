@@ -32,9 +32,9 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 # HECKS_BIN / HECKS_AGG / HECKS_INFO) ; sibling-repo fallback for
 # direct invocation from miette/body/.
 HECKS="${HECKS_BIN:-${HECKS:-}}"
-[ -z "$HECKS" ] && [ -x "$DIR/../../hecks/hecks_life/target/release/hecks-life" ] && \
-  HECKS="$(cd "$DIR/../../hecks/hecks_life/target/release" && pwd)/hecks-life"
-[ -z "$HECKS" ] && HECKS="$DIR/../../hecks_life/target/release/hecks-life"
+[ -z "$HECKS" ] && [ -x "$DIR/../../hecks/rust/target/release/hecks-life" ] && \
+  HECKS="$(cd "$DIR/../../hecks/rust/target/release" && pwd)/hecks-life"
+[ -z "$HECKS" ] && HECKS="$DIR/../../rust/target/release/hecks-life"
 
 INFO="${HECKS_INFO:-${INFO:-}}"
 [ -z "$INFO" ] && [ -d "$DIR/../../miette-state/information" ] && \

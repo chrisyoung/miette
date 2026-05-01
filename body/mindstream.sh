@@ -56,9 +56,9 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 # repo fallback for direct invocation, then legacy paths from when
 # this script lived in hecks_conception.
 HECKS="${HECKS_BIN:-}"
-[ -z "$HECKS" ] && [ -x "$DIR/../../hecks/hecks_life/target/release/hecks-life" ] && \
-  HECKS="$(cd "$DIR/../../hecks/hecks_life/target/release" && pwd)/hecks-life"
-[ -z "$HECKS" ] && HECKS="$DIR/../../hecks_life/target/release/hecks-life"
+[ -z "$HECKS" ] && [ -x "$DIR/../../hecks/rust/target/release/hecks-life" ] && \
+  HECKS="$(cd "$DIR/../../hecks/rust/target/release" && pwd)/hecks-life"
+[ -z "$HECKS" ] && HECKS="$DIR/../../rust/target/release/hecks-life"
 
 AGG="${HECKS_AGG:-}"
 [ -z "$AGG" ] && [ -d "$DIR/../../hecks/hecks_conception/aggregates" ] && \

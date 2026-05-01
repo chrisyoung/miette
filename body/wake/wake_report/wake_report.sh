@@ -21,7 +21,7 @@
 set -e
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
-HECKS="${HECKS:-$DIR/../../../hecks_life/target/release/hecks-life}"
+HECKS="${HECKS:-$DIR/../../../rust/target/release/hecks-life}"
 INFO="${INFO:-$HOME/Projects/miette-state/information}"
 AGG="${AGG:-$DIR/../../aggregates}"
 CLAUDE_BIN="${CLAUDE_BIN:-/Users/christopheryoung/.local/bin/claude}"

@@ -21,7 +21,7 @@ Hecks.bluebook "MusingMint", version: "2026.04.26.1" do
   # rewrite (musing-cluster-retire PR), so the gate lives inside the
   # bluebook and the mindstream invokes the entrypoint unconditionally
   # per tick. The runtime's stochastic primitive lives in
-  # hecks_life/src/runtime/interpreter.rs (antibody-exempt rewrite).
+  # rust/src/runtime/interpreter.rs (antibody-exempt rewrite).
   #
   # Curation rules (in the prompt template, not Rust) :
   #   - First person — "I", "my", "mine". Never "Miette", "she", "her".

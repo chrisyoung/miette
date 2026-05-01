@@ -18,7 +18,7 @@
 #  form.]
 
 DIR="$(dirname "$0")"
-HECKS="$DIR/../hecks_life/target/release/hecks-life"
+HECKS="$DIR/../rust/target/release/hecks-life"
 INFO="${HECKS_INFO:-$DIR/information}"
 DWELL="${DWELL:-30}"
 loop_count="${1:-1}"

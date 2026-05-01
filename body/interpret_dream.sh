@@ -40,10 +40,10 @@ WORLD="${HECKS_WORLD:-$DIR}"
 # Binary resolution
 if [ -n "${HECKS_BIN:-}" ]; then
   HECKS="$HECKS_BIN"
-elif [ -x "$DIR/../hecks_life/target/release/hecks-life" ]; then
-  HECKS="$DIR/../hecks_life/target/release/hecks-life"
-elif [ -x "/Users/christopheryoung/Projects/hecks/hecks_life/target/release/hecks-life" ]; then
-  HECKS="/Users/christopheryoung/Projects/hecks/hecks_life/target/release/hecks-life"
+elif [ -x "$DIR/../rust/target/release/hecks-life" ]; then
+  HECKS="$DIR/../rust/target/release/hecks-life"
+elif [ -x "/Users/christopheryoung/Projects/hecks/rust/target/release/hecks-life" ]; then
+  HECKS="/Users/christopheryoung/Projects/hecks/rust/target/release/hecks-life"
 else
   exit 0
 fi

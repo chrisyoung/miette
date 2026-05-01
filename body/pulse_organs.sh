@@ -62,10 +62,10 @@ else
 fi
 if [ -n "${HECKS_BIN:-}" ]; then
   HECKS="$HECKS_BIN"
-elif [ -x "$DIR/../../hecks/hecks_life/target/release/hecks-life" ]; then
-  HECKS="$(cd "$DIR/../../hecks/hecks_life/target/release" && pwd)/hecks-life"
+elif [ -x "$DIR/../../hecks/rust/target/release/hecks-life" ]; then
+  HECKS="$(cd "$DIR/../../hecks/rust/target/release" && pwd)/hecks-life"
 else
-  HECKS="$DIR/../../hecks_life/target/release/hecks-life"
+  HECKS="$DIR/../../rust/target/release/hecks-life"
 fi
 
 # Scalar field from the latest singleton of a store — empty if missing.

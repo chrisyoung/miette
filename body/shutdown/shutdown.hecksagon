@@ -34,7 +34,7 @@ Hecks.hecksagon "Shutdown" do
   adapter :memory
 
   # :daemon is the same process-lifecycle primitive boot uses
-  # (added 2026-04-26 in hecks_life/src/main.rs run_daemon). Boot
+  # (added 2026-04-26 in rust/src/main.rs run_daemon). Boot
   # uses it for `daemon ensure` ; shutdown uses it for `daemon stop`.
   # Both share pidfile semantics — missing pidfile is fine, dead
   # pid is fine, live pid receives SIGTERM and the pidfile is
