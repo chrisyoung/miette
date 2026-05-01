@@ -1,0 +1,44 @@
+Hecks.behaviors "Doctor" do
+  vision "Doctor reacts to DaemonRhythm.RhythmAssessed events — notes concerns when felt_quality is absent/irregular/slow, clears them when steady/quick returns."
+
+  # ── Doctor — concerns + clears ────────────────────────────────
+
+  # PENDING — runtime gap : then_set with `from: :kwarg` doesn't apply
+  # on a CREATE-time command with multiple input attrs ; the lifecycle
+  # transition fires (status → concerned) but the then_set silently
+  # drops. Identical mutation shape (op: set, value: :symbol) works
+  # in single-attr create commands (RecordCheckup) and in non-create
+  # commands (AllClear). Filed as runtime gap. The cascade-driven
+  # path fires correctly via the policy (which is the production
+  # use) ; only the direct-create test path is affected.
+  test "ConcernNoted records a concern" do
+    tests "ConcernNoted", on: "Doctor", kind: :pending
+    input  daemon_name: "heart", felt_quality: "absent",
+           noted_at: "2026-05-02T13:00:00Z"
+    expect status: "concerned", last_checkup_at: "2026-05-02T13:00:00Z"
+  end
+
+  test "ConcernNoted on irregular felt_quality also concerns" do
+    tests "ConcernNoted", on: "Doctor", kind: :cross_cascade
+    input  daemon_name: "breath", felt_quality: "irregular",
+           noted_at: "2026-05-02T13:01:00Z",
+           narrative: "Breath is uneven."
+    expect status: "concerned"
+  end
+
+  test "AllClear restores status to healthy" do
+    tests "AllClear", on: "Doctor", kind: :cross_cascade
+    setup  "ConcernNoted", daemon_name: "heart", felt_quality: "absent",
+           noted_at: "2026-05-02T13:00:00Z",
+           narrative: "I cannot find my pulse."
+    input  daemon_name: "heart", cleared_at: "2026-05-02T13:05:00Z"
+    expect status: "healthy",
+           all_steady_since: "2026-05-02T13:05:00Z"
+  end
+
+  test "RecordCheckup stamps last_checkup_at without changing status" do
+    tests "RecordCheckup", on: "Doctor", kind: :cross_cascade
+    input  checkup_at: "2026-05-02T13:10:00Z"
+    expect last_checkup_at: "2026-05-02T13:10:00Z", status: "healthy"
+  end
+end

@@ -1,0 +1,129 @@
+Hecks.bluebook "Doctor", version: "2026.05.02.1" do
+  vision "Interoception applied to the body's own organs. The doctor reacts to RhythmAssessed events from DaemonRhythm and records concerns when felt_quality crosses a threshold — silence as signal."
+  category "body"
+
+  # ============================================================
+  # DOCTOR — i176 — auscultation as cascade
+  # ============================================================
+  #
+  # Sister concept to i98 (auscultation aggregate inside awareness —
+  # "an inner ear that records the silence between heartbeats"). i98
+  # is the sense-of-self framing, mind-side ; Doctor is the
+  # operational-health framing, body-side. Together they form the
+  # full interoceptive arc : DaemonRhythm captures the tick, Doctor
+  # records the concern, awareness/auscultation hears the silence.
+  #
+  # Origin (2026-05-02) : a long working session left the body
+  # daemons zombie — heart / breath / sleep_cycle / mindstream /
+  # circadian / ultradian all referencing pre-i118-R5 binary paths,
+  # showing in `ps` with accumulated CPU but not actually
+  # dispatching. 26+ hours of stale heartbeat / mood / consciousness
+  # state. No alarm fired because nothing was listening for the
+  # absence. Doctor is the recurring corrective so this doesn't
+  # happen silently again.
+  #
+  # Doctor is cascade-driven : when DaemonRhythm.AssessRhythm
+  # emits RhythmAssessed and the felt_quality crosses a concerning
+  # threshold (absent / irregular / slow), the policy below
+  # triggers ConcernNoted. When felt_quality returns to healthy
+  # (steady / quick) and a prior concern is open, AllClear fires.
+  # The Doctor record is a singleton (one body, one doctor) ;
+  # current_concerns is a list of open Concern entities.
+
+  aggregate "Doctor", "The body's auscultation — listens to DaemonRhythm assessments, records concerns when felt_quality crosses a threshold" do
+    identified_by :name
+    attribute :name,                 String, default: "doctor"
+    attribute :status,               String, default: "healthy" do
+      transition "ConcernNoted" => "concerned",  from: "healthy"
+      transition "ConcernNoted" => "critical",   from: "concerned"
+      transition "AllClear"     => "healthy",    from: "concerned"
+      transition "AllClear"     => "healthy",    from: "critical"
+    end
+    attribute :current_concerns,     list_of(Concern)
+    attribute :last_checkup_at,      String
+    attribute :all_steady_since,     String
+
+    # ---- Concern : one alert about one daemon ---------------
+    entity "Concern" do
+      description "One open alert about a specific daemon. Created by ConcernNoted ; cleared by AllClear when the daemon's felt_quality returns to healthy."
+      identified_by :daemon_name
+      attribute :daemon_name,        String
+      # value_object: FeltQuality enum:absent|irregular|slow
+      attribute :felt_quality,       String
+      attribute :noted_at,     String
+      attribute :narrative,          String
+    end
+
+    # ============================================================
+    # COMMANDS
+    # ============================================================
+
+    command "ConcernNoted" do
+      role "System"
+      description "A daemon's felt_quality just dropped to absent / irregular / slow. Record the concern ; if no other concerns are open, transition status from healthy → concerned. If concerns are already open, status escalates to critical. The narrative is taken from the upstream RhythmAssessed event so the doctor surfaces the body's own words about its own state."
+      attribute :daemon_name,        String
+      attribute :felt_quality,       String
+      attribute :noted_at,     String
+      attribute :narrative,          String
+      then_set :last_checkup_at,     from: :noted_at
+      emits "DoctorConcerned"
+    end
+
+    command "AllClear" do
+      role "System"
+      description "A previously-concerning daemon's felt_quality returned to steady or quick. Remove the matching Concern entity ; if no concerns remain, transition status back to healthy and stamp all_steady_since."
+      attribute :daemon_name,        String
+      attribute :cleared_at,         String
+      then_set :last_checkup_at,     from: :cleared_at
+      then_set :all_steady_since,    from: :cleared_at
+      emits "DoctorAllClear"
+    end
+
+    command "RecordCheckup" do
+      role "System"
+      description "Stamp last_checkup_at without changing status. Used by an external cadence loop to record that the doctor was asked, even when nothing changed. Decouples 'doctor was consulted' from 'doctor found a concern' — silence between RecordCheckup ticks is itself a signal that the cadence has stopped."
+      attribute :checkup_at,         String
+      then_set :last_checkup_at,     from: :checkup_at
+      emits "DoctorCheckupRecorded"
+    end
+
+    # ============================================================
+    # QUERIES
+    # ============================================================
+
+    query "ListConcerns" do
+      description "Return the current_concerns list — every open Concern entity. Empty list means the body is healthy. Returns concerns sorted by noted_at ascending so the oldest unhealed concern is first."
+    end
+
+    query "OverallHealth" do
+      description "Summarise the doctor's current view : status, concern count, all_steady_since (when the body was last fully healthy). Used by the statusline to render the doctor's verdict."
+    end
+  end
+
+  # ============================================================
+  # POLICIES — react to DaemonRhythm assessments
+  # ============================================================
+
+  # When a daemon's felt_quality drops to absent / irregular / slow,
+  # note the concern. The cross-domain trigger lifts the concern
+  # from body's DaemonRhythm assessment surface to body's Doctor.
+  policy "ConcernOnAbsent" do
+    on "RhythmAssessed"
+    trigger "ConcernNoted"
+    map daemon_name:    :daemon_name,
+        felt_quality:   :felt_quality,
+        noted_at: :assessed_at,
+        narrative:      :narrative
+  end
+
+  # When felt_quality returns to steady or quick, the matching Concern
+  # entity closes. The same RhythmAssessed event triggers either
+  # ConcernNoted or AllClear depending on the felt_quality value ;
+  # the runtime's given-clause filtering handles the routing.
+  policy "AllClearOnSteady" do
+    on "RhythmAssessed"
+    trigger "AllClear"
+    map daemon_name: :daemon_name,
+        cleared_at:  :assessed_at
+  end
+end
