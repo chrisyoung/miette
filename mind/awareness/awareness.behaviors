@@ -118,19 +118,15 @@ Hecks.behaviors "Awareness" do
     expect meta_level: 2, insight: "sample"
   end
 
-  # PENDING (i117 Round 4) : the cascade still fires
-  # ReflectionOccurred → BecameLucid → DreamSignalSent → ... but
-  # MusingRecorded silently drops because RecordMusing's reference_to(Musing)
-  # collides cross-corpus : two Musing aggregates exist (this one in
-  # miette/mind/state/Musing and capabilities/musings/Musing for ideas).
-  # inject_refs' target_ctx lookup picks the first by depth-sort —
-  # post-move that's the wrong one (capabilities/musings/Musing's repo
-  # is empty, so dispatch fails silently). The structural fix is either
-  # renaming one of the two Musing aggregates (bluebook surgery — many
-  # references) or teaching inject_refs to disambiguate by command-context.
-  # Filed as drift ; restore this test once that lands.
+  # i161 closed — inject_refs now disambiguates target_ctx by
+  # preferring the dispatching command's aggregate context over
+  # depth-then-path iteration order. The cross-corpus collision
+  # between miette/mind/state/Musing and the capability-namespace
+  # Musing used to misroute the singleton fallback ; the fix prefers
+  # the same-context match first, so the cascade reaches
+  # MusingRecorded again. See rust/src/runtime/mod.rs inject_refs.
   test "ReflectOnObservation cascades through policy chain" do
-    tests "ReflectOnObservation", on: "Witness", kind: :pending
+    tests "ReflectOnObservation", on: "Witness", kind: :cross_cascade
     setup  "Observe", observing: "sample"
     setup  "MuseOnState", trigger: "sample"
     input  insight: "sample"

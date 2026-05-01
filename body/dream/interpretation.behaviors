@@ -121,14 +121,12 @@ Hecks.behaviors "Interpretation" do
     expect title: "sample", description: "sample", origin: "sample", kind: "sample", accepted: "pending"
   end
 
-  # PENDING (i161) : same depth-sort collision as awareness
-  # ReflectOnObservation. Bare-name AcceptProposal exists on both
-  # Proposal (here) and DomainProposal (capabilities/dream_interpretation).
-  # Post-move depth math gives DomainProposal a lower depth so
-  # find_command picks the wrong command for ref injection.
-  # Restore once i161's runtime fix lands.
+  # i161 closed — inject_refs now prefers same-context target
+  # resolution. AcceptProposal on Proposal (this aggregate's context)
+  # routes to the right repo despite the cross-corpus collision with
+  # DomainProposal (capabilities/dream_interpretation).
   test "AcceptProposal runs" do
-    tests "AcceptProposal", on: "Proposal", kind: :pending
+    tests "AcceptProposal", on: "Proposal", kind: :cross_cascade
     setup  "ProposeAction", title: "sample", description: "sample", origin: "sample", kind: "sample"
     expect accepted: "yes"
   end
@@ -139,9 +137,9 @@ Hecks.behaviors "Interpretation" do
     expect accepted: "deferred"
   end
 
-  # PENDING (i161) — see AcceptProposal note above.
+  # i161 closed — see AcceptProposal note above.
   test "DismissProposal runs" do
-    tests "DismissProposal", on: "Proposal", kind: :pending
+    tests "DismissProposal", on: "Proposal", kind: :cross_cascade
     setup  "ProposeAction", title: "sample", description: "sample", origin: "sample", kind: "sample"
     expect accepted: "dismissed"
   end
