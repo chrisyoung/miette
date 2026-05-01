@@ -102,6 +102,10 @@ Hecks.bluebook "Mood", version: "2026.04.28.1" do
       then_set :precision_level, to: 0.5
       emits "Drifted"
     end
+
+    query ReadInnerWeather do
+      description "How do I feel right now? Returns current_state, creativity_level, precision_level — the being's emotional state. Replaces the SelfCheckin.InnerWeather projection (i111-I)."
+    end
   end
 
   # New conception excites

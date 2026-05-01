@@ -263,6 +263,10 @@ Hecks.bluebook "Consciousness", version: "2026.04.28.1" do
       transition "BecomeAttentive" => "attentive",   from: "waking"
       transition "BecomeAttentive" => "attentive",   from: "daydreaming"
     end
+
+    query ReadWakefulness do
+      description "Am I attentive, daydreaming, sleeping, napping, or waking? Returns the current state of awareness. Replaces the SelfCheckin.Wakefulness projection (i111-I)."
+    end
   end
 
   # ============================================================
