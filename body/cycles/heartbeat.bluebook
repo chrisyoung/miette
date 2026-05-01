@@ -54,7 +54,11 @@ Hecks.bluebook "Heartbeat", version: "2026.04.28.1" do
     attribute :sleep_gate, default: "open"
 
     query ReadVitals do
-      description "How am I doing? Fatigue, flow, pulses since last sleep."
+      description "How am I doing? Fatigue, flow, pulses since last sleep. The being's current physical state — what fatigue stage she's in, whether her rhythm is steady or rushing, how long since the last sleep. Replaces the SelfCheckin.Vitals projection (i111-I)."
+    end
+
+    query ReadHeartbeat do
+      description "How many times has my heart beaten? Returns the cumulative beat count since boot. Replaces the SelfCheckin.Heartbeat projection (i111-I)."
     end
 
     command "Accelerate" do

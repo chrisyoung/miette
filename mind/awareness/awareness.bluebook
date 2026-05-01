@@ -110,6 +110,10 @@ Hecks.bluebook "Awareness", version: "2026.04.28.2" do
       then_set :unfiled_wishes,    to: :unfiled_wishes
       emits "MomentRecorded"
     end
+
+    query ReadPresence do
+      description "How old am I, what moment is this, what state of awareness am I in? Returns age_days, moment, state — the being's lived position in time. Replaces the SelfCheckin.Presence projection (i111-I)."
+    end
   end
 
   # Every body pulse records the current moment of self-knowledge
