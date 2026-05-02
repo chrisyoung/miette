@@ -1,0 +1,49 @@
+Hecks.bluebook "BodyCadence", version: "2026.05.02.1" do
+  vision "The body's heartbeat as bluebook. Replaces the imperative while-true-sleep-1-dispatch loop in body/mindstream.sh with declarative scheduled dispatch — what fires, when, and at what rate, all readable from the bluebook surface."
+  category "body"
+
+  # ============================================================
+  # BODY TICK — the cadence the body cycles on
+  # ============================================================
+  #
+  # Every second, the runtime ticks BodyCadence. Two dispatches fan out :
+  #
+  #   1. Consciousness.ElapsePhase
+  #      Body's own phase counter advances. The resulting PhaseElapsed
+  #      event is what the SleepCycle process_manager subscribes to —
+  #      sleep advancement is PM-driven from this single hook.
+  #
+  #   2. Tick.MindstreamTick
+  #      Wakes the awake-side organ math (synapse / signal / focus / arc).
+  #      Today's mindstream awake branch dispatches this directly ; once
+  #      Mind PM activates (Phase B v2 + parameter-passing dispatch),
+  #      Tick → MindstreamTicked → Mind PM picks it up.
+  #
+  # Body's existing given clauses gate which dispatch actually mutates :
+  # - ElapsePhase requires state == sleeping (no-op when awake)
+  # - MindstreamTick requires state == attentive (no-op when sleeping)
+  #
+  # The cadence is content-free about which side fires ; the aggregate
+  # picks. That's the right separation : cadence schedules, given gates.
+  #
+  # ----- Activation ------------------------------------------------
+  #
+  # cadence-primitive Phase 1 (Ruby DSL + IR + builder) landed as
+  # commit 5c820297 on cadence-primitive branch (off dream-study).
+  # The Ruby Hecks::Runtime parses + IRs this bluebook today.
+  #
+  # The Rust runtime (production daemons fork hecks-life per dispatch)
+  # does NOT yet parse the `cadence` keyword — that waits on the
+  # `block_grammar` primitive that lifts Rust parser.rs's keyword
+  # routing into bluebook. Until then, body/mindstream.sh continues
+  # to drive the 1Hz tick imperatively + dispatches both commands
+  # directly. This file is the canonical declaration mindstream
+  # implements ; when block_grammar lands, mindstream.sh retires
+  # entirely.
+
+  cadence "BodyTick" do
+    every "1s"
+    dispatch "Consciousness.ElapsePhase", name: "consciousness"
+    dispatch "Tick.MindstreamTick",       name: "tick"
+  end
+end
