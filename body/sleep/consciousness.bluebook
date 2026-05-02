@@ -51,6 +51,11 @@ Hecks.bluebook "Consciousness", version: "2026.04.28.1" do
     # sleep cycle. Mint reads conversations between this timestamp and now.
     # value_object: Timestamp (ISO 8601 UTC)
     attribute :last_wake_at, String
+    # last_sleep_entered_at is the ISO timestamp of the most recent EnterSleep
+    # dispatch. Stamped atomically with the rest of the sleep-init state so a
+    # mid-dispatch death can never leave state=sleeping with timestamp=null.
+    # value_object: Timestamp (ISO 8601 UTC)
+    attribute :last_sleep_entered_at, String
     attribute :idle_seconds, Integer
 
     command "DetectIdle" do
@@ -71,7 +76,9 @@ Hecks.bluebook "Consciousness", version: "2026.04.28.1" do
 
     command "EnterSleep" do
       role "Daemon"
-      description "Begin full sleep — 8 cycles, only when fatigued. Initializes all sleep state."
+      description "Begin full sleep — 8 cycles, only when fatigued. Initializes all sleep state ATOMICALLY, including the sleep-entered timestamp and the initial stage, so a mid-dispatch death cannot leave state=sleeping with null timestamp/stage. Caller passes the ISO-8601 sleep_at — same convention CompleteFinalLight uses for wake_at (i196)."
+      # value_object: Timestamp (ISO 8601 UTC)
+      attribute :sleep_at, String
       emits "SleepEntered"
       then_set :state, to: "sleeping"
       then_set :sleep_stage, to: "light"
@@ -82,6 +89,7 @@ Hecks.bluebook "Consciousness", version: "2026.04.28.1" do
       then_set :dream_pulses_needed, to: 5
       then_set :is_lucid, to: "no"
       then_set :sleep_summary, to: "settling into light sleep"
+      then_set :last_sleep_entered_at, to: :sleep_at
     end
 
     command "TakeNap" do
@@ -101,9 +109,13 @@ Hecks.bluebook "Consciousness", version: "2026.04.28.1" do
 
     command "WakeUp" do
       role "Creator"
-      description "Return to waking consciousness"
+      description "Return to waking consciousness. Stamps last_wake_at and clears sleep_stage so the wake timestamp is fresh and the awake state isn't shadowed by stale sleep-phase fields. Caller passes the ISO-8601 wake_at — same convention CompleteFinalLight uses (i197)."
+      # value_object: Timestamp (ISO 8601 UTC)
+      attribute :wake_at, String
       emits "WokenUp"
       then_set :state, to: "waking"
+      then_set :last_wake_at, to: :wake_at
+      then_set :sleep_stage, to: ""
     end
 
     # ── Wake mood classification ─────────────────────────────────
@@ -182,7 +194,11 @@ Hecks.bluebook "Consciousness", version: "2026.04.28.1" do
       description "REM complete — enough dreams produced, advance to deep sleep. Pure content gate : REM proceeds at Claude's response cadence, ends when dream_pulses reaches its target. No artificial time floor."
       given("state must be sleeping") { state == "sleeping" }
       given("stage must be rem") { sleep_stage == "rem" }
-      given("dream complete") { dream_pulses > 4 }
+      # i208 fix : honour dream_pulses_needed instead of a hard-coded 4.
+      # Regular REM sets needed=5, lucid REM (final cycle) sets needed=8.
+      # The old gate `> 4` cut lucid REM short at 5 dreams ; this one
+      # waits for the cycle's declared target so lucid gets its full eight.
+      given("dream complete") { dream_pulses >= dream_pulses_needed }
       then_set :sleep_stage, to: "deep"
       then_set :phase_ticks, to: 0
       then_set :is_lucid, to: "no"
