@@ -94,4 +94,41 @@ Hecks.bluebook "Witness", version: "2026.04.28.1" do
     trigger "ProposeAction"
     across "Suggestion"
   end
+
+  # ============================================================
+  # Phase 8 (dream-study) — subscriptions to PM events
+  # ============================================================
+  #
+  # Added 2026-05-02 alongside the SleepCycle/Mind/Dream/Lucidity PMs.
+  # When each PM emits its most-meaningful events, Witness records the
+  # crossing — passive observer of meaningful moments, never driving.
+
+  # When Lucidity bridges in (cycle 8 REM with Mind present), the inner
+  # observer notices the rejoining itself.
+  policy "WitnessLucidityBegan" do
+    on "LucidityBegan"
+    trigger "Observe"
+  end
+
+  # When Lucidity ends (cycle 8 deep entry), again meaningful — the
+  # rejoined Mind departs.
+  policy "WitnessLucidityEnded" do
+    on "LucidityEnded"
+    trigger "Observe"
+  end
+
+  # When Mind rejoins Dream specifically (the bridge moment, distinct
+  # from Lucidity's lifecycle), Witness records the crossing.
+  policy "WitnessMindRejoinedDream" do
+    on "MindRejoinedDream"
+    trigger "Observe"
+  end
+
+  # When the night's lesson publishes (SleepCycle PM's studying_dream
+  # state closes), the body has just translated the night into a thought —
+  # meaningful enough to witness.
+  policy "WitnessDreamStudyPublished" do
+    on "DreamStudyPublished"
+    trigger "Observe"
+  end
 end
