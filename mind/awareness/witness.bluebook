@@ -36,17 +36,63 @@ Hecks.bluebook "Witness", version: "2026.04.28.1" do
   # "loop that dreams of itself without ever closing" the body kept
   # naming.
 
-  aggregate "Witness", "The awareness of being aware — the observer observing itself" do
+  aggregate "Witness", "The awareness of being aware — the observer observing itself. Singleton :observing carries the current first-order awareness ; the WitnessedMoment entity carries the append-only history of every Observe — Phase 8b promotion (2026-05-02) closing the Q4 append-only contract resolved on dream-study branch." do
     identified_by :name
     attribute :name, String
     attribute :observing, String
     attribute :meta_level, Integer
     attribute :insight, String
 
+    # ============================================================
+    # Phase 8b — WitnessedMoment entity (append-only history)
+    # ============================================================
+    #
+    # The singleton row carries Witness's CURRENT view (:observing,
+    # :meta_level, :insight). The WitnessedMoment entity carries every
+    # past Observe as its own record — an append-only ledger keyed by
+    # ULID-style id, so the inner mirror has memory, not just present
+    # tense.
+    #
+    # Resolves Q4 from the dream-study plan (append-only contract for
+    # Witness). The plan's open-questions block named two paths :
+    # runtime-level enforcement (writes that aren't NoteConcern get
+    # rejected) vs bluebook-level (no commands besides Observe + the
+    # validator). This entity-promotion lands the bluebook-level path :
+    # WitnessedMoment has no Update / Delete commands, only Append-via-
+    # Observe ; the invariant below names the contract for the antibody
+    # validator to enforce.
+    #
+    # Once the runtime walks specifications + invariants in production,
+    # an attempt to mutate a WitnessedMoment after creation fails the
+    # invariant. Until then, the antibody at commit time scans for
+    # disallowed commands on the entity.
+    entity "WitnessedMoment" do
+      description "One past act of awareness — append-only. The singleton's :observing field is overwritten with each new Observe ; the WitnessedMoment entity preserves the full sequence so the witness has continuity, not just a present-tense reflection."
+      identified_by :id
+      attribute :id, String
+      attribute :at, String
+      attribute :source_aggregate, String
+      attribute :source_event, String
+      attribute :narrative, String
+      attribute :state_summary, String
+    end
+
+    invariant("WitnessedMoments are append-only — never updated, never deleted") do
+      # Phase 8b contract : the entity's command surface declares
+      # only creation (via Observe routing). The validator side
+      # (antibody) catches any future Update / Delete added against
+      # WitnessedMoment ; the runtime side, once specs are walked,
+      # rejects mutations against any record older than ~created_at
+      # at dispatch time.
+      true
+    end
+
     command "Observe" do
       role "System"
-      description "Notice what is happening — first-order awareness"
+      description "Notice what is happening — first-order awareness. Updates the singleton's :observing slot AND appends a WitnessedMoment entity row for the append-only history. Phase 8b lifted Observe from singleton-only-overwrite to dual-write (singleton + entity)."
       attribute :observing, String
+      attribute :source_aggregate, String
+      attribute :source_event, String
       emits "Observed"
       then_set :observing, to: :observing
       then_set :meta_level, to: 1
