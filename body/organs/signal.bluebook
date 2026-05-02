@@ -9,8 +9,14 @@ Hecks.bluebook "Signal", version: "2026.04.26.1" do
   # If unaccessed (≤3) and old (>20s), pulse_organs.sh archives them.
 
   aggregate "Signal", "A short-lived message — somatic or conceptual" do
-    identified_by :ref
-    attribute :ref, String
+    # i204 fix : identify by the heki storage uuid (auto-populated)
+    # rather than :ref, which FireSignal never set and pulse_organs/
+    # consolidate's direct heki appends never wrote — every
+    # AccessSignal/ArchiveSignal dispatch was failing AggregateNotFound.
+    # 438 signals piled up unconsolidated for days because of this.
+    # Surfaced 2026-05-01 by the silent-fail sweep.
+    identified_by :id
+    attribute :id, String
     attribute :kind, String
     attribute :payload, String
     attribute :strength, Float

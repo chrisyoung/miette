@@ -9,8 +9,14 @@ Hecks.bluebook "Synapse", version: "2026.04.26.1" do
   # decays without. Below 0.1 the synapse is composted into Remains.
 
   aggregate "Synapse", "A connection between two topics — strengthens with firing, decays in silence" do
-    identified_by :ref
-    attribute :ref, String
+    # i203 fix : identify by the heki storage uuid (populated automatically
+    # on every record) rather than :ref, which CreateSynapse never set
+    # and pulse_organs.sh's direct heki append never wrote — leaving
+    # every Strengthen/Fire/Decay/Compost dispatch failing AggregateNotFound
+    # because no synapse had a populated lookup field. Surfaced 2026-05-01
+    # the moment silent failures were removed.
+    identified_by :id
+    attribute :id, String
     attribute :from, String
     attribute :to, String
     attribute :strength, Float
