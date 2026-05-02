@@ -53,28 +53,60 @@ to heki) which is its own follow-on branch.
 - in_memory_full_night : 22/22 green (BehaviorRuntime path unaffected
   by refactor)
 
-## Phase D — production activation gap (next branch)
+## Phase D — PM state persistence to heki ✓ LANDED
 
-Production daemons fork `hecks-life` per dispatch. Each subprocess
-builds a fresh PMEngine in memory ; PM instance state (current state +
-last event per correlation_id) does NOT persist between forks. Result :
-PMs declared today are inert in production daemons even with Phase A+B+C
-landed.
+Closed the production-activation gap. Each `hecks-life` subprocess
+fork now loads existing PM instances from heki on Runtime boot,
+persists transitions after each react. State accumulates across forks ;
+PMs declared in bluebook drive the cycle in production.
 
-Phase D needs :
+Implementation :
 
-1. **Heki format for PM instances** — likely `<data_dir>/process_managers/<pm_name_snake>.heki`,
-   keyed by correlation_id, each record carrying `{state, last_event, last_transition_at}`.
-2. **PMEngine.load_from_heki** at register time — populates `instances`
-   from disk so transitions resume across forks.
-3. **PMEngine.persist_after_react** — writes the new state after each
-   transition, before the subprocess exits.
-4. **Race-condition handling** — two near-simultaneous forks both reading
-   the same PM state then writing different transitions. Either lock-on-write
-   or a CAS pattern. Need to think through.
-5. **PM-name-rename migration** — when a PM's name changes (or it splits
-   into two PMs), what happens to the existing heki rows? Default to
-   "manual migration step in the rename PR" mirroring aggregate rename.
+1. **Heki path convention** — `<data_dir>/process_managers/<pm_name_snake>.heki`,
+   one file per PM, each row keyed by correlation_id, record carries
+   `{state, last_event, updated_at}`.
+2. **PMEngine.load_persisted(data_dir)** — called once in
+   `Runtime::boot_with_data_dir` after register ; reads each PM's
+   heki + populates `instances` hash. Missing files = empty store
+   (first-run case).
+3. **PMEngine.persist_instance(pm_name, correlation_id, data_dir)** —
+   called from `drain_policies` after each PM trigger fires. Best-effort —
+   write failure doesn't abort cascade.
+4. **Race-condition handling** — last-write-wins. The daemon model
+   dispatches one event per fork ; concurrent same-instance writes are
+   rare. Tightening (file lock or CAS) is its own follow-on if production
+   reveals contention.
+5. **PM-name-rename migration** — out of scope for first cut ; mirrors
+   aggregate rename pattern (manual migration step in the rename PR).
+
+Tests : 4/4 pm_engine green including `persists_and_reloads_instance_state`
+(subprocess 1 transitions + persists ; subprocess 2 loads + further
+transitions on top work as expected).
+
+Commit : `f18570c7`.
+
+## Phase E — staging : co-fire with mindstream as parallel safety check
+
+Phase D enables PM-driven dispatch in production daemons but doesn't
+yet retire mindstream.sh's sleep branch. Bootstrap risk : if no
+SleepEntered event fires after the binary update, SleepCycle PM's
+instance doesn't exist in heki (starts_on is SleepEntered) and the
+body would get stuck mid-sleep with no advances.
+
+Safer staging :
+
+- **Phase E (now)** : leave mindstream's sleep branch in place. PMs
+  co-fire next sleep cycle. mindstream + PM both dispatch advance
+  commands ; given clauses pick winner ; only the matching command
+  fires (the others GivenFailed cleanly). No behavior change, but
+  `process_managers/sleep_cycle.heki` populates as a verification trace.
+- **Phase F (next branch)** : after one overnight verifies the heki
+  shows correct transitions, mindstream's sleep branch deletes (collapses
+  ~25 LOC). The sleep cycle is genuinely PM-driven from that point.
+
+This matches the dream-study commitment statement : *"body keeps
+running through every PR."* Phase D is structurally the keystone ;
+Phase F is the cosmetic retirement once verified.
 
 ## Followups (after Phase D)
 
@@ -90,8 +122,13 @@ Phase D needs :
 ## Branch state
 
 - Off `dream-study` (which carries Phase 1+2+3 + 4-10 from the dream-study session)
-- Two commits :
+- Four commits :
   - `2cd7cd0b` — Phase A (PMEngine) + Phase B v1 (dispatch keyword)
   - `f6098b0` — Phase C (SleepCycle PM declarative)
+  - `dce2f10`  — initial debrief
+  - `f18570c7` — Phase D (PM state persistence to heki)
 
-Working tree clean. Ready for review.
+Working tree clean. Production-activation-ready ; the cycle drives
+through PMs starting next SleepEntered. Phase F (mindstream sleep
+branch retirement) is its own follow-on once Phase E (overnight
+co-fire verification) passes.
