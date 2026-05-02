@@ -48,98 +48,67 @@ Hecks.bluebook "BodySleep", version: "2026.05.02.1" do
     state "done"
 
     # ----- Phase advancement (PhaseElapsed → next stage) ----------
-    # The runtime watches Body's PhaseElapsed events. Per-stage gates
-    # decide which advancement command to dispatch ; the action body
-    # encodes the routing logic the legacy mindstream.sh sleep branch
-    # owns today.
+    # Declarative dispatch form (Phase B v1 — runtime-pm-execution branch).
+    # Routing conditionals (cycle 8 lucid vs regular ; pulses-needed cap)
+    # live in Body's command given clauses ; the PM dispatches BOTH
+    # candidates and Body picks via given matching. GivenFailed is
+    # design-level — non-matching command short-circuits cleanly.
 
-    on "PhaseElapsed", transition: { light: :rem } do |event, pm|
-      # When light's phase_ticks elapses, advance to REM. Cycle 8 routes
-      # to lucid REM ; cycles 1-7 to regular REM.
-      cmd = if pm.attributes[:sleep_cycle] == pm.attributes[:sleep_total]
-              "AdvanceLightToLucidRem"
-            else
-              "AdvanceLightToRem"
-            end
-      { commands: [{ name: "Body.#{cmd}", attrs: { name: pm.id } }] }
+    on "PhaseElapsed", transition: { light: :rem } do
+      # Body picks regular vs lucid via cycle < sleep_total / cycle == sleep_total givens
+      dispatch "Body.AdvanceLightToRem"
+      dispatch "Body.AdvanceLightToLucidRem"
     end
 
-    on "PhaseElapsed", transition: { rem: :deep } do |event, pm|
-      # REM → deep advancement. Gated by dream_pulses >= dream_pulses_needed
-      # (5 for regular, 8 for lucid REM — i208 contract).
-      pulses_done    = pm.attributes[:dream_pulses]
-      pulses_needed  = pm.attributes[:dream_pulses_needed]
-      next_cmd = pulses_done >= pulses_needed ? "AdvanceRemToDeep" : "AdvanceRemToDeepCap"
-      { commands: [{ name: "Body.#{next_cmd}", attrs: { name: pm.id } }] }
+    on "PhaseElapsed", transition: { rem: :deep } do
+      # Body picks regular advance vs cap via dream_pulses >= dream_pulses_needed given (i208)
+      dispatch "Body.AdvanceRemToDeep"
+      dispatch "Body.AdvanceRemToDeepCap"
     end
 
-    on "PhaseElapsed", transition: { deep: :light } do |event, pm|
-      # Deep → next light cycle (cycles 1-7) or Deep → final_light (cycle 8).
-      cmd = if pm.attributes[:sleep_cycle] >= pm.attributes[:sleep_total]
-              "AdvanceDeepToFinalLight"
-            else
-              "AdvanceDeepToLight"
-            end
-      { commands: [{ name: "Body.#{cmd}", attrs: { name: pm.id } }] }
+    on "PhaseElapsed", transition: { deep: :light } do
+      # Body picks next-cycle vs final-light via cycle >= sleep_total given
+      dispatch "Body.AdvanceDeepToLight"
+      dispatch "Body.AdvanceDeepToFinalLight"
     end
 
-    on "PhaseElapsed", transition: { final_light: :studying_dream } do |event, pm|
-      # final_light's phase elapses → wake-and-study. CompleteFinalLight
-      # transitions Body.state to attentive ; the studying_dream tail
-      # composes the wake report from the night's dream content.
-      { commands: [
-          { name: "Body.CompleteFinalLight", attrs: { name: pm.id, wake_at: event.attributes[:occurred_at] } },
-          { name: "Heartbeat.RecoverFatigue",  attrs: { name: "heart" } },
-          { name: "Mood.RefreshMood",          attrs: { name: "mood" } },
-          { name: "WakeReport.Compose",        attrs: { sleep_cycle: pm.attributes[:sleep_total] } }
-      ] }
+    on "PhaseElapsed", transition: { final_light: :studying_dream } do
+      # Wake sequence — CompleteFinalLight transitions Body.state to
+      # attentive ; the cascading policies fan out to Heartbeat, Mood,
+      # WakeReport per their existing on-WokenUp / on-attentive triggers.
+      dispatch "Body.CompleteFinalLight"
+      dispatch "Heartbeat.RecoverFatigue"
+      dispatch "Mood.RefreshMood"
+      dispatch "WakeReport.Compose"
     end
 
     # ----- Dream pulse counting ----------------------------------
-    # Dream PM produces `DreamProduced` events (autonomous content)
-    # ; SleepCycle counts them so REM advancement gates know when to fire.
-
-    on "DreamProduced", transition: { rem: :rem } do |event, pm|
-      { commands: [{ name: "Body.RecordDreamPulse", attrs: { name: pm.id } }] }
+    # Dream PM emits DreamProduced (autonomous content) ; SleepCycle
+    # tells Body so its dream_pulses counter advances.
+    on "DreamProduced", transition: { rem: :rem } do
+      dispatch "Body.RecordDreamPulse"
     end
 
     # ----- Lucidity bridge --------------------------------------
     # When Lucidity ends (cycle 8 deep entry), SleepCycle continues
-    # the deep-phase work normally. Lucidity is itself a separate PM
-    # ; this handler just acknowledges the transition.
-
-    on "LucidityEnded", transition: { rem: :deep } do |event, pm|
-      { commands: [] }   # no-op — Body.AdvanceRemToDeep already fired
+    # the deep-phase work normally. No-op handler — state-track only.
+    on "LucidityEnded", transition: { rem: :deep } do
+      # state transition only ; no command dispatch
     end
 
     # ----- Studying the dream ------------------------------------
-    # The closing tail. After WokenUp, SleepCycle is in studying_dream.
-    # Dispatches dream interpretation, files lessons to inbox, composes
-    # the wake report. When DreamStudyPublished fires, ends_on closes
-    # the PM instance and transitions to `done`.
-
-    on "DreamStudyStarted", transition: { studying_dream: :studying_dream } do |event, pm|
-      # Kick off interpretation. The :llm adapter (when it lands) does
-      # the actual reading ; until then, an interpret_dream.sh shell
-      # adapter named in the hecksagon bridges.
-      { commands: [{ name: "DreamInterpretation.Compose", attrs: { sleep_cycle: pm.attributes[:sleep_total] } }] }
+    # Closing tail. After WokenUp, SleepCycle is in studying_dream.
+    on "DreamStudyStarted", transition: { studying_dream: :studying_dream } do
+      dispatch "DreamInterpretation.Compose"
     end
 
-    on "LessonProposed", transition: { studying_dream: :studying_dream } do |event, pm|
-      # Each actionable insight from the dream corpus → an inbox row
-      # + a Memory.RecordSignificant write. Multiple LessonProposed
-      # events can fire per night ; this handler is idempotent.
-      { commands: [
-          { name: "Memory.RecordSignificant", attrs: { text: event.attributes[:text] } },
-          { name: "Inbox.Add",                attrs: { body: event.attributes[:text], priority: "low" } }
-      ] }
+    on "LessonProposed", transition: { studying_dream: :studying_dream } do
+      dispatch "Memory.RecordSignificant"
+      dispatch "Inbox.Add"
     end
 
-    on "DreamStudyPublished", transition: { studying_dream: :done } do |event, pm|
-      # The wake report is written + the lessons are filed. SleepCycle
-      # closes ; the PM instance archives. ends_on declared above
-      # triggers archival on this event.
-      { commands: [] }
+    on "DreamStudyPublished", transition: { studying_dream: :done } do
+      # ends_on declared above triggers archival on this event.
     end
   end
 end
