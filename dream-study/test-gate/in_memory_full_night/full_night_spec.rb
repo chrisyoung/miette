@@ -132,11 +132,15 @@ RSpec.describe "in-memory full night — 8-cycle sleep with fixture LLM" do
       expect(snap[:last_wake_at]).to eq(wake_at)
     end
 
-    it "Heartbeat resets to alert with open gate (RecoverFatigue cascade)" do
+    it "Heartbeat resets to rested with open gate (RecoverFatigue cascade)" do
+      # Post i201 closure : RecoverFatigue now lands at "rested" (the
+      # felt state of just-woken). BecomeAlert walks rested → alert as
+      # pulses_since_sleep crosses 10 ; the rest of the ladder follows.
+      # This spec asserts the wake-end state, before BecomeAlert fires.
       snap = helper.snapshot
       expect(snap[:heartbeat_sleep_gate]).to eq("open")
       expect(snap[:heartbeat_fatigue]).to eq("0.0")
-      expect(snap[:heartbeat_fatigue_state]).to eq("alert")
+      expect(snap[:heartbeat_fatigue_state]).to eq("rested")
       expect(helper.emitted?("FatigueRecovered")).to be(true)
     end
 
