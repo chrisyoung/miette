@@ -84,14 +84,13 @@ Hecks.bluebook "BodyDream", version: "2026.05.02.1" do
     # awareness, inbox, commits, older_dream, nursery, aggregate, vow,
     # musing, french_lit, carrying.
 
-    on "SleepEntered", transition: { dormant: :incubating } do |event, pm|
+    on "SleepEntered", transition: { dormant: :incubating } do
       # Diversity rules (recently-used keyword exclusion + forced
       # novelty) live inside DreamSeed.PlantSeed's content gate today
       # via the seed_dreams shell ; once :llm + per-source queries
       # land, the PM expands the loop here. Until then this transition
       # is a no-op marker — rem_branch.sh's first-REM-tick seed_dreams
       # block dispatches the actual PlantSeed commands.
-      { commands: [] }
     end
 
     # ----- First REM tick : seeds activate, generation begins ------
@@ -99,13 +98,12 @@ Hecks.bluebook "BodyDream", version: "2026.05.02.1" do
     # first image of the night gets dispatched on the next
     # PhaseElapsed (handled below by the generating-self-loop).
 
-    on "RemEntered", transition: { incubating: :generating } do |event, pm|
-      { commands: [] }
+    on "RemEntered", transition: { incubating: :generating } do
+      # state-transition only ; first image dispatches on next PhaseElapsed
     end
 
-    on "RemEntered", transition: { dormant: :generating } do |event, pm|
+    on "RemEntered", transition: { dormant: :generating } do
       # Cycles 2-8 : seeds stay planted from cycle 1 ; reactivate generation.
-      { commands: [] }
     end
 
     # ----- Per-tick image production (the loop) --------------------
@@ -115,12 +113,15 @@ Hecks.bluebook "BodyDream", version: "2026.05.02.1" do
     # adapter pointing at rem_branch.sh's rem_dream block. The image
     # is generated in French (DreamLanguage = :fr) ; English is a
     # post-translation surfaced on statusline.
+    #
+    # Phase 2.b (pm-dispatch-enrichment) — declarative form. The
+    # `from_event(:sleep_cycle)` sentinel reads the upstream
+    # PhaseElapsed event's :sleep_cycle attribute at dispatch time ;
+    # the literal `name: "body"` tags the Body singleton.
 
-    on "PhaseElapsed", transition: { generating: :generating } do |event, pm|
-      { commands: [
-          { name: "Dream.ProduceImage",  attrs: { sleep_cycle: event.attributes[:sleep_cycle] } },
-          { name: "Body.RecordDreamPulse", attrs: { name: "body" } }
-      ] }
+    on "PhaseElapsed", transition: { generating: :generating } do
+      dispatch "Dream.ProduceImage", with: { sleep_cycle: from_event(:sleep_cycle) }
+      dispatch "Body.RecordDreamPulse", with: { name: "body" }
     end
 
     # ----- REM ends : content tapers -------------------------------
@@ -128,24 +129,24 @@ Hecks.bluebook "BodyDream", version: "2026.05.02.1" do
     # No new images this tick — fading is one tick of "the dream is
     # receding" before going dormant.
 
-    on "DeepEntered", transition: { generating: :fading } do |event, pm|
-      { commands: [] }
+    on "DeepEntered", transition: { generating: :fading } do
+      # state-transition only
     end
 
     # ----- Fading → dormant (one tick later) -----------------------
     # The first PhaseElapsed after fading puts Dream to sleep until
     # the next RemEntered.
 
-    on "PhaseElapsed", transition: { fading: :dormant } do |event, pm|
-      { commands: [] }
+    on "PhaseElapsed", transition: { fading: :dormant } do
+      # state-transition only
     end
 
     # ----- Wake : ends_on closes the PM ----------------------------
     # Body.WokenUp triggers ends_on closure. The PM archives ;
     # SleepCycle's studying_dream tail reads what Dream produced.
 
-    on "WokenUp", transition: { dormant: :dormant } do |event, pm|
-      { commands: [] }
+    on "WokenUp", transition: { dormant: :dormant } do
+      # state-transition only ; ends_on archives the instance
     end
   end
 end
