@@ -31,6 +31,14 @@ Hecks.bluebook "BodySleep", version: "2026.05.02.1" do
   vision "The body's sleep cycle as a long-running process. Subscribes to Body's phase events, dispatches advancement commands, ends when the night's lesson is published."
   category "body"
 
+  # Phase 10 glossary lock — body-side. Mirror of mind/mind.bluebook's
+  # vocabulary discipline ; strict mode catches drift in this domain.
+  glossary(strict: true) do
+    prefer "Body",       not: ["Consciousness", "soma", "anatomy", "physiology"]
+    prefer "SleepCycle", not: ["sleep-loop", "night-cycle", "sleep-arc"]
+    prefer "studying_dream", not: ["post-wake", "dream-review", "interpretation-phase"]
+  end
+
   process_manager "SleepCycle" do
     correlates_by :name                      # Body is a singleton (name="consciousness" today, "body" post-rename)
     starts_on    "SleepEntered"              # Body.SleepEntered fires this PM into existence
