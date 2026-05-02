@@ -1,0 +1,19 @@
+Hecks.bluebook "HeartCadence", version: "2026.05.02.1" do
+  vision "The heart's beat as bluebook. One Heart.Beat per second ; the daemon that today wraps `hecks-life loop` becomes a single declarative line."
+  category "body"
+
+  # ============================================================
+  # HEART TICK — one beat per second
+  # ============================================================
+  #
+  # heart.hecksagon's header (since i76) sketched exactly this primitive
+  # syntax — the cadence keyword lands today is the closure of that
+  # filed runtime gap. Once block_grammar lifts the Rust parser side,
+  # heart.sh / boot_miette.sh's `hecks-life loop heart.bluebook --command
+  # Beat --every 1s` retires entirely.
+
+  cadence "HeartTick" do
+    every "1s"
+    dispatch "Heart.Beat", name: "heart"
+  end
+end
