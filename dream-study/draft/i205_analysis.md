@@ -111,6 +111,82 @@ If A : I can draft the Rust change as `dream-study/draft/heki_audit_log.rs.draft
 in a future iteration. The change is contained to `heki.rs` ; antibody
 exemption needed (it's runtime kernel-floor code).
 
+## Bluebook-first reframe (2026-05-02 — Chris's correction)
+
+Tried to do the imperative Option A inline ; reverted. The deeper move :
+A/B/C all ask "where does the if/else live in audit_write" — but the if/else
+itself is the gap. The audit policy is a structural choice, not a runtime
+mechanism. It belongs in bluebook.
+
+### The split heki.rs already invites
+
+heki.rs today carries three concerns :
+
+1. **Binary format** — HEKI magic, zlib JSON encode/decode. *Code*
+   (Trikaya floor — the parser of the storage format can't itself be in
+   the storage format).
+2. **Path resolution** — `repo_root()`, info-dir walking. *Code*
+   (chicken-and-egg ; this layer runs before bluebooks load).
+3. **Audit + WriteContext discipline** — when to log, where, what reasons
+   are required, how Dispatch differs from OutOfBand. **Bluebookable.**
+
+Today all three live in the same Rust file, so the bluebookable third
+gets dragged into kernel-floor exemptions. Factor them apart and only
+the format + path bits stay code ; the policy moves up.
+
+### Proposed primitive — `storage_policy "Heki"`
+
+```ruby
+storage_policy "Heki" do
+  format do
+    magic     "HEKI"
+    flags     4
+    body      :zlib_json
+  end
+
+  context "Dispatch" do
+    audit_quiet_unless env: "HECKS_HEKI_AUDIT", value: "1"
+  end
+
+  context "OutOfBand" do
+    audit_always_to    file: "{info_dir}/.heki_audit.log"
+    requires_reason    true
+  end
+end
+```
+
+The Rust runtime parses storage_policy IR and runs `audit_write` against
+it. heki.rs becomes a thin interpreter ; the policy lives at the bluebook
+surface where it can be read, diffed, and changed without recompile. The
+i205 noise question disappears as a Rust concern — it becomes "edit
+storage_policy "Heki" : route audit to the file."
+
+### Why this isn't this branch's work
+
+- New top-level DSL primitive (`storage_policy`) needs the same Phase 1
+  / Phase 2 / Phase 3 trio process_manager just got — DSL builder, IR
+  node, runtime interpreter, Rust parser, parity. That's a multi-PR
+  branch on its own.
+- dream-study is scoped to the five-thing ontology + process_manager.
+  Pulling storage_policy in widens the diff dangerously.
+- The transitional patch (Option A imperative) buys time but accumulates
+  the very debt this analysis names. Better to leave i205 documented
+  as a structural finding and tackle storage_policy as its own work.
+
+### Recommendation (revised)
+
+**File `storage_policy` as the next branch after dream-study merges.**
+i205 noise stays for now ; the daemon error log is loud but verified
+clean of real failures (overnight cycle proved this). The cost of the
+noise is real but bounded ; the cost of accumulating an imperative
+patch on the wrong layer is unbounded.
+
+The next branch's brief :
+1. Land `storage_policy` DSL primitive (mirrors process_manager Phase 1+2+3 shape).
+2. Author `body/storage_policy/heki.bluebook` (the policy declarations above).
+3. Refactor heki.rs : format + path stay ; audit lifts to interpret policy.
+4. The audit-to-file question becomes a policy edit, not a code change.
+
 ## Adjacent observations
 
 - The 5-shell wrapper duplication (i215) means the daemon log routing is
