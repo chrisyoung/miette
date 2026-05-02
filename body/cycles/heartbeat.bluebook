@@ -130,10 +130,28 @@ Hecks.bluebook "Heartbeat", version: "2026.04.28.1" do
     end
 
     # Fatigue state ladder — walked by BecomeX commands, each guarded
-    # by a pulses_since_sleep threshold. Policies below trigger all five on
+    # by a pulses_since_sleep threshold. Policies below trigger all six on
     # FatigueAccumulated; only the one whose given clauses match the current
     # (fatigue_state, pulses) pair actually fires. This replaces the old
     # per-tick lifecycle walk that walked alert→delirious in 5 ticks.
+    #
+    # i201 closure (2026-05-02 — bug surfaced when the body sat at "rested"
+    # all afternoon while fatigue accumulated past 5.0) : RecoverFatigue
+    # now lands at "rested" (the felt state of just-woken), and BecomeAlert
+    # walks rested → alert at ~10 pulses so the rest of the ladder can
+    # engage. Previously RecoverFatigue → "alert" with no transition
+    # into "rested" anywhere — making "rested" a phantom state the
+    # renderer + status_coherence both supported but the lifecycle
+    # couldn't reach.
+    command "BecomeAlert" do
+      role "Daemon"
+      description "Walk rested → alert at 10 pulses (~10 seconds at 1Hz). The rested state is the just-woken felt state ; alert is when the body has noticed it's awake."
+      given("at alert threshold") { pulses_since_sleep >= 10 }
+      given("currently rested") { fatigue_state == "rested" }
+      then_set :fatigue_state, to: "alert"
+      emits "BecameAlert"
+    end
+
     command "BecomeFocused" do
       role "Daemon"
       description "Settle into focused at 250 pulses (~4 minutes at 1Hz)."
@@ -179,13 +197,22 @@ Hecks.bluebook "Heartbeat", version: "2026.04.28.1" do
       emits "BecameDelirious"
     end
 
-    lifecycle :fatigue_state, default: "alert" do
+    lifecycle :fatigue_state, default: "rested" do
+      # Default = rested. Fresh + freshly-woken bodies start here.
+      # The ladder walks rested → alert → focused → normal → tired →
+      # exhausted → delirious as pulses_since_sleep accumulates.
+      transition "BecomeAlert"     => "alert",     from: "rested"
       transition "BecomeFocused"   => "focused",   from: "alert"
       transition "BecomeNormal"    => "normal",    from: "focused"
       transition "BecomeTired"     => "tired",     from: "normal"
       transition "BecomeExhausted" => "exhausted", from: "tired"
       transition "BecomeDelirious" => "delirious", from: "exhausted"
-      transition "RecoverFatigue"  => "alert",     from: ["alert", "focused", "normal", "tired", "exhausted", "delirious"]
+      # RecoverFatigue (on wake) lands at "rested" — the felt state of
+      # just-woken. BecomeAlert walks the body up out of rested as it
+      # notices it's awake. i201 closure : previously this transitioned
+      # directly to "alert", making "rested" unreachable through the
+      # lifecycle.
+      transition "RecoverFatigue"  => "rested",    from: ["rested", "alert", "focused", "normal", "tired", "exhausted", "delirious"]
     end
 
     # ============================================================
@@ -204,8 +231,7 @@ Hecks.bluebook "Heartbeat", version: "2026.04.28.1" do
     end
 
     specification :rested do |heart|
-      heart.fatigue.to_f < 0.2 &&
-        ["rested", "alert"].include?(heart.fatigue_state.to_s)
+      heart.fatigue.to_f < 0.2 && heart.fatigue_state.to_s == "rested"
     end
 
     specification :sleep_gate_open do |heart|
@@ -232,10 +258,20 @@ Hecks.bluebook "Heartbeat", version: "2026.04.28.1" do
     trigger "CheckSleepNeeded"
   end
 
-  # Fatigue ladder — one policy per rung. Each tick fires all five; only the
+  # Fatigue ladder — one policy per rung. Each tick fires all six; only the
   # BecomeX whose given clauses match the current (state, pulses) pair
   # succeeds. Replaces the old per-tick lifecycle walk that got delirious in
   # 5 ticks after a clean wake.
+  #
+  # i201 closure : BecomeAlertOnFatigue is the new bottom rung — walks
+  # the body out of rested at ~10 pulses post-wake. Without this rung
+  # the body sat at "rested" all day with fatigue accumulating past 5.0
+  # but no state transition firing.
+  policy "BecomeAlertOnFatigue" do
+    on "FatigueAccumulated"
+    trigger "BecomeAlert"
+  end
+
   policy "BecomeFocusedOnFatigue" do
     on "FatigueAccumulated"
     trigger "BecomeFocused"
