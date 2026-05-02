@@ -54,6 +54,63 @@ refactor complete in the bluebook + Ruby runtime layers.
 - Pizzas smoke green post Phase 2 (PMs no-op when not declared)
 - 24/24 spec/hecks/runtime green (Phase 2 mixin causes no regressions)
 
+## The Bluebook-First recursion (added late session 2026-05-02)
+
+Across the day Chris pushed three Bluebook-First questions in sequence,
+each pointing at imperative drift in Rust files :
+
+1. **heki.rs could be bluebook?** — re i205 noise routing. Surfaced :
+   the audit policy half is bluebookable as `storage_policy "Heki"` ;
+   the binary format + path-resolution halves stay code (Trikaya floor).
+   I reverted the imperative if/else patch I'd written and filed
+   the proper reframe as `dream-study/draft/i205_analysis.md` (commit
+   `0c7c51a`).
+
+2. **parse_blocks.rs could be bluebook?** — re my action-body skip
+   indent-fix. Surfaced : the block grammar half is bluebookable as
+   `block_grammar "Bluebook"` ; the byte-tokenization stays code. The
+   indent-fix itself is real bug ; kept on `dream-study` as commit
+   `42e8b2f3`. The grammar reframe is its own branch.
+
+3. **pm_engine could be bluebook?** — re the rust-pm-runtime branch
+   I'd just started building. Surfaced : the state-machine interpreter
+   pattern is bluebookable as `runtime_engine "ProcessManager"` (and
+   PolicyEngine + WorkflowExecutor collapse into the same primitive).
+   I dropped the rust-pm-runtime branch entirely ; the imperative
+   PMEngine work was the wrong abstraction.
+
+The pattern at every level is consistent : *what the Rust runtime
+DOES is structural, and structural is bluebook.* The recursion has
+a floor (L0 = bytes + machine code), but the floor is much further
+down than where I keep accidentally drawing it.
+
+## Bluebook-First backlog — four primitives, four follow-on branches
+
+| # | Primitive | What it lifts | Today's blocker |
+|---|---|---|---|
+| 1 | `storage_policy "Heki"` | i205 audit routing + WriteContext discipline | imperative if/else in heki.rs:82-88 |
+| 2 | `block_grammar "Bluebook"` | parser block rules (which keywords nest, how `end` matches) | hardcoded in parse_blocks.rs |
+| 3 | `runtime_engine` | PMEngine + PolicyEngine + WorkflowExecutor as one declarable primitive | Ruby Hecks::Runtime has PMEngine via Phase 2 ; Rust has nothing yet |
+| 4 | `Statusline.Render` query (Phase 9) | run_statusline.rs hardcoded format strings + icon tables | 635 LOC Rust → ~110 LOC IR walker projected |
+
+**Recommended order** (each a separate branch off main once dream-study merges) :
+
+1. **`runtime_engine`** first — biggest user-value unlock. After it lands,
+   the four PM bluebooks (Phase 4-7) execute in production, and
+   mindstream.sh's sleep branch retires. The cycle runs through PMs.
+2. **`storage_policy`** next — daemon error log gets clean signal channel ;
+   doctor + dispatch wrapper actually become useful.
+3. **`block_grammar`** third — meta-level cleanup ; not user-facing but
+   makes the parser declarative + easier to extend (e.g. if `runtime_engine`
+   needs new sub-keywords, it's a grammar edit not a Rust edit).
+4. **Phase 9 Statusline.Render** last — the prep already shipped
+   (`1d887167`). Production conversion is mostly mechanical once the
+   three runtime primitives gaps are filled.
+
+Each branch follows the same Phase 1+2+3 trio shape `process_manager`
+just got : Ruby DSL builder + IR + Rust parser + canonical_ir mirror +
+parity fixture. The pattern is now well-understood.
+
 ## What's deliberately out of scope (follow-on branches)
 
 These were named in the plan's "After this branch" section and held :
