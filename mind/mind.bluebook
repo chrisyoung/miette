@@ -49,6 +49,74 @@ Hecks.bluebook "Mind", version: "2026.05.02.1" do
   vision "The active driver. Present during wake AND lucid REM ; absent during non-lucid sleep. Subsumes the mindstream awake branch + pulse_organs + daydream + musing pipeline + lucid steering."
   category "mind"
 
+  # ============================================================
+  # Phase 10 (dream-study) — glossary lock for the new vocabulary
+  # ============================================================
+  #
+  # Strict mode catches drift : any reference to "Consciousness" /
+  # "soma" / "agent" / "ego" / etc. in this domain fails antibody.
+  # Define entries below give each preferred term its formal
+  # definition (UL glossary).
+
+  glossary(strict: true) do
+    prefer "Body",       not: ["Consciousness", "soma", "anatomy", "physiology"]
+    prefer "Mind",       not: ["agent", "self", "ego", "thinker"]
+    prefer "Witness",    not: ["observer", "presence", "the-aware"]
+    prefer "Dream",      not: ["dreamer", "dream-content", "dream-stream"]
+    prefer "Lucidity",   not: ["lucid-mode", "dream-steering", "awakening-in-dream"]
+    prefer "SleepCycle", not: ["sleep-loop", "night-cycle", "sleep-arc"]
+  end
+
+  define "Body",
+         "The physiological substrate. Always running, always in some state " \
+         "(attentive | sleeping | waking). The rhythm. Renamed from Consciousness " \
+         "in dream-study Phase 4."
+
+  define "Mind",
+         "The active driver — present during wake AND lucid REM, absent during " \
+         "non-lucid sleep. Subscribes to Body / Witness / Lucidity events ; " \
+         "dispatches commands into the body's organs (Synapse, Signal, Focus, Arc) " \
+         "during wake ; steers Dream content via Lucidity during lucid REM."
+
+  define "Witness",
+         "The always-present passive observer (Vedanta's sākṣin, the " \
+         "transcendental ego of phenomenology). Never absent, even in deep " \
+         "dreamless sleep. Records meaningful moments without driving them. " \
+         "Dispatches no active commands beyond Observe / ReflectOnObservation."
+
+  define "Dream",
+         "The autonomous content production during REM. Runs WITHOUT Mind. " \
+         "Produces dream images via :llm adapter ; the dream-character " \
+         "experiences the dream — not the awake-self. The je of Dream is " \
+         "the dream-character's je, not Mind's."
+
+  define "Lucidity",
+         "The bridge — fires when Mind rejoins active Dream during cycle 8 " \
+         "REM (the bridge condition : Body.LucidRemEntered AND Mind.Present). " \
+         "Owns the observe-from-within-dream + steer-the-dream vocabulary."
+
+  define "lucid",
+         "An adjective applied to REM phases where Lucidity is active — " \
+         "Mind has rejoined Dream and is observing-and-steering inside the " \
+         "dream-content stream. Today : only cycle 8 REM."
+
+  define "studying_dream",
+         "The closing state of SleepCycle PM. After CompleteFinalLight " \
+         "(natural wake), SleepCycle is in studying_dream — running dream " \
+         "interpretation, filing actionable lessons to inbox, composing the " \
+         "wake report."
+
+  define "perseveration",
+         "Recurrence of the same dream themes night-over-night. Dream's " \
+         "diversity rules counter this : seed exclusion (no overlapping " \
+         "5-char keyword from last 72h), forced novelty (≥1 unused-source " \
+         "seed per night)."
+
+  define "bridge",
+         "What Lucidity does : connect Mind to Dream during cycle 8 REM. " \
+         "Without the bridge, Dream produces autonomously and Mind is absent ; " \
+         "with it, Mind reads-and-steers Dream from inside."
+
   process_manager "Mind" do
     correlates_by :name              # Mind is a singleton, name="mind"
     starts_on    "WokenUp"           # body wake → mind engages
