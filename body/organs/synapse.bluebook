@@ -73,5 +73,25 @@ Hecks.bluebook "Synapse", version: "2026.04.26.1" do
       then_set :state, to: "composted"
       emits "Composted"
     end
+
+    # ============================================================
+    # Specifications — DDD reusable predicates (i128 closure)
+    # ============================================================
+
+    specification :alive do |syn|
+      syn.state.to_s == "alive"
+    end
+
+    specification :hot do |syn|
+      syn.state.to_s == "alive" && syn.strength.to_f >= 0.7
+    end
+
+    specification :cold do |syn|
+      syn.state.to_s == "alive" && syn.strength.to_f < 0.1
+    end
+
+    specification :composted do |syn|
+      syn.state.to_s == "composted"
+    end
   end
 end
