@@ -172,22 +172,44 @@ while true; do
   loop_count=$((loop_count + 1))
   state=$(read_state)
 
-  # ── Gap 2: sleep branch — fan out the 8 sleep-phase commands ─
-  # Givens self-gate ; only the phase-appropriate one mutates.
+  # ── Sleep branch retired (Phase F, runtime-pm-execution branch) ──
+  # Body cycle advancement is now PM-driven : ElapsePhase emits
+  # PhaseElapsed → SleepCycle process_manager (body/sleep/sleep_cycle.bluebook)
+  # dispatches the matching Body.AdvanceXToY command, gated by Body's
+  # existing given clauses. PM state persists across hecks-life subprocess
+  # forks via process_managers/sleep_cycle.heki (Phase D).
+  #
+  # mindstream still kicks the cadence — one ElapsePhase per tick is
+  # what lets the PM react. Content shells (rem_branch / nrem_branch)
+  # stay : autonomous Dream content via :llm is a separate concern ;
+  # Phase 6 Dream PM will subsume them when its parameter-passing
+  # dispatch (Phase B v2) lands.
+  #
+  # If PMs misbehave : `HECKS_PM_DRIVE_SLEEP=0` flag re-enables the
+  # legacy 7-command fan-out below (currently no-op, kept inside the
+  # else for one-overnight rollback safety ; deletes outright in next
+  # branch once a clean overnight cycle is verified).
   if [ "$state" = "sleeping" ]; then
-    for cmd in \
-      Consciousness.ElapsePhase \
-      Consciousness.AdvanceLightToRem \
-      Consciousness.AdvanceLightToLucidRem \
-      Consciousness.AdvanceRemToDeep \
-      Consciousness.AdvanceRemToDeepCap \
-      Consciousness.AdvanceDeepToLight \
-      Consciousness.AdvanceDeepToFinalLight; do
-      dispatch "$cmd" name=consciousness
-    done
-    dispatch Consciousness.CompleteFinalLight \
-      name=consciousness \
-      wake_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    if [ "${HECKS_PM_DRIVE_SLEEP:-1}" = "0" ]; then
+      # Legacy fallback — rollback path if PM-driven cycle breaks.
+      for cmd in \
+        Consciousness.ElapsePhase \
+        Consciousness.AdvanceLightToRem \
+        Consciousness.AdvanceLightToLucidRem \
+        Consciousness.AdvanceRemToDeep \
+        Consciousness.AdvanceRemToDeepCap \
+        Consciousness.AdvanceDeepToLight \
+        Consciousness.AdvanceDeepToFinalLight; do
+        dispatch "$cmd" name=consciousness
+      done
+      dispatch Consciousness.CompleteFinalLight \
+        name=consciousness \
+        wake_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    else
+      # PM-driven path — single ElapsePhase tick, SleepCycle PM
+      # dispatches the right advancement via PhaseElapsed cascade.
+      dispatch Consciousness.ElapsePhase name=consciousness
+    fi
 
     "$DIR/rem_branch.sh" "$loop_count" 2>/dev/null
     "$DIR/nrem_branch.sh" "$loop_count" 2>/dev/null
