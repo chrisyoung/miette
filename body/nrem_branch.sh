@@ -47,8 +47,52 @@ AGG="${HECKS_AGG:-${AGG:-}}"
 [ -z "$AGG" ] && AGG="$DIR/../aggregates"
 LOOP="${1:-$(date +%s)}"
 
+# ── Error logging ──────────────────────────────────────────────────
+# Dispatch + write failures route to $ERR_LOG (never silenced) so a
+# regression in heki paths, command shapes, or AGG resolution surfaces
+# in seconds rather than days. Read failures and feature probes that
+# legitimately tolerate missing data keep their 2>/dev/null.
+ERR_LOG="${HECKS_DAEMON_ERR_LOG:-$INFO/daemon_errors.log}"
+mkdir -p "$(dirname "$ERR_LOG")" 2>/dev/null || true
+
+# i207 + Doctor wiring : short-circuit on GivenFailed (design-level
+# gating, not regression) ; on real failure note Doctor.NoteConcern
+# best-effort. See mindstream.sh for the long-form rationale.
+dispatch() {
+  local stderr rc cmd_full agg_name cmd_name
+  stderr=$("$HECKS" "$AGG" "$@" 2>&1 >/dev/null) ; rc=$?
+  if [ $rc -ne 0 ]; then
+    if printf '%s' "$stderr" | grep -q 'GivenFailed'; then
+      return 0
+    fi
+    printf '%s\n' "$stderr" >>"$ERR_LOG"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $(basename "$0") line ${BASH_LINENO[0]}: dispatch failed: $*" >>"$ERR_LOG"
+    cmd_full="$1"; agg_name="${cmd_full%%.*}"; cmd_name="${cmd_full#*.}"
+    "$HECKS" "$AGG" Doctor.NoteConcern \
+      aggregate_name="$agg_name" command_name="$cmd_name" \
+      failure_kind="DispatchFailed" \
+      script="$(basename "$0")" line="${BASH_LINENO[0]}" \
+      noted_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      >/dev/null 2>>"$ERR_LOG" || true
+    return 1
+  fi
+}
+
+heki_write() {
+  if ! "$HECKS" heki "$@" 2>>"$ERR_LOG"; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $(basename "$0") line ${BASH_LINENO[0]}: heki write failed: $*" >>"$ERR_LOG"
+    "$HECKS" "$AGG" Doctor.NoteConcern \
+      aggregate_name="heki" command_name="$1" \
+      failure_kind="HekiWriteFailed" \
+      script="$(basename "$0")" line="${BASH_LINENO[0]}" \
+      noted_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      >/dev/null 2>>"$ERR_LOG" || true
+    return 1
+  fi
+}
+
 # ── Read state ─────────────────────────────────────────────────────
-state_kv=$("$HECKS" heki latest "$INFO/consciousness.heki" 2>/dev/null \
+state_kv=$("$HECKS" heki latest "$INFO/consciousness/consciousness.heki" 2>/dev/null \
   | jq -r '[
       (.state // ""),
       (.sleep_stage // ""),
@@ -110,12 +154,12 @@ narrative="${templates[$((RANDOM % ${#templates[@]}))]}"
 # Dispatch DreamPulse so the status bar narrates it (same path as REM).
 # Prefix distinguishes consolidation work from poetic imagery.
 prefix="🧠"
-"$HECKS" "$AGG" Consciousness.DreamPulse \
-  consciousness="$cid" impression="$prefix $narrative" >/dev/null 2>&1
+dispatch Consciousness.DreamPulse \
+  consciousness="$cid" impression="$prefix $narrative" >/dev/null
 
 # Also update sleep_summary directly so statusline + wake ritual see
 # the consolidation detail (sleep.bluebook's Advance* commands set
 # short phase-transition strings; this overrides during the phase).
-"$HECKS" heki upsert "$INFO/consciousness.heki" \
+heki_write upsert "$INFO/consciousness/consciousness.heki" \
   --reason "nrem_branch : overlay consolidation narrative onto sleep_summary so the statusline tells what the body is actually doing during NREM" \
-  id="$cid" sleep_summary="$narrative" >/dev/null 2>&1
+  id="$cid" sleep_summary="$narrative" >/dev/null

@@ -68,6 +68,50 @@ else
   HECKS="$DIR/../../rust/target/release/hecks-life"
 fi
 
+# ── Error logging ──────────────────────────────────────────────────
+# Dispatch + write failures route to $ERR_LOG (never silenced) so a
+# regression in heki paths, command shapes, or AGG resolution surfaces
+# in seconds rather than days. Read failures and feature probes that
+# legitimately tolerate missing data keep their 2>/dev/null.
+ERR_LOG="${HECKS_DAEMON_ERR_LOG:-$INFO/daemon_errors.log}"
+mkdir -p "$(dirname "$ERR_LOG")" 2>/dev/null || true
+
+# i207 + Doctor wiring : short-circuit on GivenFailed (design-level
+# gating, not regression) ; on real failure note Doctor.NoteConcern
+# best-effort. See mindstream.sh for the long-form rationale.
+dispatch() {
+  local stderr rc cmd_full agg_name cmd_name
+  stderr=$("$HECKS" "$AGG" "$@" 2>&1 >/dev/null) ; rc=$?
+  if [ $rc -ne 0 ]; then
+    if printf '%s' "$stderr" | grep -q 'GivenFailed'; then
+      return 0
+    fi
+    printf '%s\n' "$stderr" >>"$ERR_LOG"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $(basename "$0") line ${BASH_LINENO[0]}: dispatch failed: $*" >>"$ERR_LOG"
+    cmd_full="$1"; agg_name="${cmd_full%%.*}"; cmd_name="${cmd_full#*.}"
+    "$HECKS" "$AGG" Doctor.NoteConcern \
+      aggregate_name="$agg_name" command_name="$cmd_name" \
+      failure_kind="DispatchFailed" \
+      script="$(basename "$0")" line="${BASH_LINENO[0]}" \
+      noted_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      >/dev/null 2>>"$ERR_LOG" || true
+    return 1
+  fi
+}
+
+heki_write() {
+  if ! "$HECKS" heki "$@" 2>>"$ERR_LOG"; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $(basename "$0") line ${BASH_LINENO[0]}: heki write failed: $*" >>"$ERR_LOG"
+    "$HECKS" "$AGG" Doctor.NoteConcern \
+      aggregate_name="heki" command_name="$1" \
+      failure_kind="HekiWriteFailed" \
+      script="$(basename "$0")" line="${BASH_LINENO[0]}" \
+      noted_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      >/dev/null 2>>"$ERR_LOG" || true
+    return 1
+  fi
+}
+
 # Scalar field from the latest singleton of a store — empty if missing.
 latest_field() {
   "$HECKS" heki latest-field "$1" "$2" 2>/dev/null || true
@@ -75,16 +119,16 @@ latest_field() {
 
 # Bail early if Miette is sleeping. Organs hibernate — no math, no
 # signals, no decay. The heartbeat keeps time; the body rests.
-state=$(latest_field "$INFO/consciousness.heki" state)
+state=$(latest_field "$INFO/consciousness/consciousness.heki" state)
 [ "$state" = "sleeping" ] && exit 0
 
 # What's she carrying? heartbeat.carrying first; fall back to the most
 # recent awareness moment's concept.
-carrying=$(latest_field "$INFO/heartbeat.heki" carrying)
+carrying=$(latest_field "$INFO/heartbeat/heartbeat.heki" carrying)
 [ "$carrying" = "—" ] && carrying=""
 
 if [ -z "$carrying" ]; then
-  carrying=$("$HECKS" heki list "$INFO/awareness.heki" \
+  carrying=$("$HECKS" heki list "$INFO/awareness/awareness.heki" \
     --order moment:desc --format json 2>/dev/null \
     | jq -r 'map(.concept // .carrying // "")
              | map(select(. != "" and . != "—"))
@@ -98,28 +142,28 @@ now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 # Find an alive synapse whose `from` matches the carrying topic. Dispatch
 # StrengthenSynapse — DSL increments+0.02 and clamps to [0,1] internally
 # (i106). If no match, birth a new synapse via heki append.
-match_id=$("$HECKS" heki list "$INFO/synapse.heki" \
+match_id=$("$HECKS" heki list "$INFO/synapse/synapse.heki" \
   --where "from=$carrying" --where "state=alive" \
   --fields id --format tsv 2>/dev/null | head -n1)
 
 if [ -n "$match_id" ]; then
-  "$HECKS" "$AGG" Synapse.StrengthenSynapse synapse="$match_id" >/dev/null 2>&1
-  "$HECKS" "$AGG" Synapse.FireSynapse synapse="$match_id" last_fired_at="$now" >/dev/null 2>&1
+  dispatch Synapse.StrengthenSynapse synapse="$match_id" >/dev/null
+  dispatch Synapse.FireSynapse synapse="$match_id" last_fired_at="$now" >/dev/null
 else
   # Birth a new synapse. Use heki append (CreateSynapse has no
   # reference_to so dispatch would singleton-upsert). Birth strength 0.3
   # leaves headroom above the 0.1 compost threshold.
-  "$HECKS" heki append "$INFO/synapse.heki" \
+  heki_write append "$INFO/synapse/synapse.heki" \
     --reason "pulse_organs : birth a new synapse for the topic just carried" \
     from="$carrying" to="$carrying" strength=0.3 \
-    state=alive firings=0 last_fired_at="$now" >/dev/null 2>&1
+    state=alive firings=0 last_fired_at="$now" >/dev/null
 fi
 
 # ── Decay all synapses (DSL ×0.98 + clamp); compost any below 0.1 ────
 # Read each row's current strength + firings to detect compost-eligible
 # rows BEFORE the multiply runs (after-decay <0.1 → compost). The
 # multiply itself is now bluebook-side (i106) — no awk in the dispatch.
-DECAY_PLAN=$("$HECKS" heki list "$INFO/synapse.heki" \
+DECAY_PLAN=$("$HECKS" heki list "$INFO/synapse/synapse.heki" \
   --where state=alive --format json 2>/dev/null \
   | jq -r '.[] | [
       .id,
@@ -133,30 +177,30 @@ DECAY_PLAN=$("$HECKS" heki list "$INFO/synapse.heki" \
 while IFS='|' read -r sid will_compost cur_strength firings from_topic; do
   [ -z "$sid" ] && continue
   if [ "$will_compost" = "true" ]; then
-    "$HECKS" "$AGG" Synapse.Compost synapse="$sid" >/dev/null 2>&1
-    "$HECKS" heki append "$INFO/remains.heki" \
+    dispatch Synapse.Compost synapse="$sid" >/dev/null
+    heki_write append "$INFO/remains/remains.heki" \
       --reason "pulse_organs : capture composted synapse's dying values for the remains corpus" \
       from_synapse="$from_topic" \
       strength_at_death="$cur_strength" \
       firings="$firings" \
-      died_at="$now" >/dev/null 2>&1
+      died_at="$now" >/dev/null
   else
-    "$HECKS" "$AGG" Synapse.DecaySynapse synapse="$sid" >/dev/null 2>&1
+    dispatch Synapse.DecaySynapse synapse="$sid" >/dev/null
   fi
 done <<<"$DECAY_PLAN"
 
 # ── Fire signals: one somatic + one concept ──────────────────────────
 # Direct heki append (FireSignal has no reference_to so dispatch would
 # singleton-upsert) — each tick must produce a distinct signal record.
-"$HECKS" heki append "$INFO/signal.heki" \
+heki_write append "$INFO/signal/signal.heki" \
   --reason "pulse_organs : per-tick somatic signal — body says it's alive" \
-  kind=somatic payload=pulse strength=0.5 access_count=0 created_at="$now" >/dev/null 2>&1
-"$HECKS" heki append "$INFO/signal.heki" \
+  kind=somatic payload=pulse strength=0.5 access_count=0 created_at="$now" >/dev/null
+heki_write append "$INFO/signal/signal.heki" \
   --reason "pulse_organs : per-tick concept signal — body carries the current topic" \
-  kind=concept payload="$carrying" strength=0.5 access_count=0 created_at="$now" >/dev/null 2>&1
+  kind=concept payload="$carrying" strength=0.5 access_count=0 created_at="$now" >/dev/null
 
 # ── Archive cold signals: access_count <= 3 AND age > 20s ────────────
-ARCHIVE_IDS=$("$HECKS" heki list "$INFO/signal.heki" --format json 2>/dev/null \
+ARCHIVE_IDS=$("$HECKS" heki list "$INFO/signal/signal.heki" --format json 2>/dev/null \
   | jq -r --arg now "$now" '
       def iso_to_epoch:
         . as $s | ($s | sub("Z$"; "Z") | fromdateiso8601);
@@ -170,30 +214,30 @@ ARCHIVE_IDS=$("$HECKS" heki list "$INFO/signal.heki" --format json 2>/dev/null \
 
 while read -r sid; do
   [ -z "$sid" ] && continue
-  "$HECKS" "$AGG" Signal.ArchiveSignal signal="$sid" >/dev/null 2>&1
+  dispatch Signal.ArchiveSignal signal="$sid" >/dev/null
 done <<<"$ARCHIVE_IDS"
 
 # ── Focus: re-weight from firing frequency ───────────────────────────
 # Caller computes the raw weight (0.5 + firings/20.0); bluebook clamps
 # to [0, 1] internally (i106). No more awk-side clamp.
-firings_sum=$("$HECKS" heki list "$INFO/synapse.heki" \
+firings_sum=$("$HECKS" heki list "$INFO/synapse/synapse.heki" \
   --where "from=$carrying" --where state=alive --format json 2>/dev/null \
   | jq '[.[] | (.firings // 0)] | add // 0' 2>/dev/null)
 weight=$(awk -v f="${firings_sum:-0}" 'BEGIN { printf "%.4f", 0.5 + (f / 20.0) }')
 
-focus_id=$(latest_field "$INFO/focus.heki" id)
+focus_id=$(latest_field "$INFO/focus/focus.heki" id)
 
 if [ -z "$focus_id" ]; then
-  "$HECKS" "$AGG" Focus.SetFocus target="$carrying" weight="$weight" updated_at="$now" >/dev/null 2>&1
+  dispatch Focus.SetFocus target="$carrying" weight="$weight" updated_at="$now" >/dev/null
 else
-  "$HECKS" "$AGG" Focus.AdjustWeight focus="$focus_id" weight="$weight" updated_at="$now" >/dev/null 2>&1
+  dispatch Focus.AdjustWeight focus="$focus_id" weight="$weight" updated_at="$now" >/dev/null
 fi
 
 # ── Arc: advance the long swing ──────────────────────────────────────
-arc_id=$(latest_field "$INFO/arc.heki" id)
+arc_id=$(latest_field "$INFO/arc/arc.heki" id)
 
 if [ -n "$arc_id" ]; then
-  "$HECKS" "$AGG" Arc.AdvanceArc arc="$arc_id" >/dev/null 2>&1
+  dispatch Arc.AdvanceArc arc="$arc_id" >/dev/null
 fi
 
 exit 0

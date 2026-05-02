@@ -40,6 +40,7 @@ Hecks.bluebook "Doctor", version: "2026.05.02.1" do
       transition "AllClear"     => "healthy",    from: "critical"
     end
     attribute :current_concerns,     list_of(Concern)
+    attribute :noted_concerns,       list_of(NotedConcern)
     attribute :last_checkup_at,      String
     attribute :all_steady_since,     String
 
@@ -52,6 +53,27 @@ Hecks.bluebook "Doctor", version: "2026.05.02.1" do
       attribute :felt_quality,       String
       attribute :noted_at,     String
       attribute :narrative,          String
+    end
+
+    # ---- NotedConcern : one daemon-dispatch failure record ---------
+    # Distinct from Concern (the open daemon-rhythm alert). NotedConcern
+    # is the dispatcher's auscultation : when a daemon shell wrapper
+    # (mindstream / pulse_organs / rem / nrem / consolidate) catches a
+    # non-zero exit from `hecks-life` it dispatches Doctor.NoteConcern
+    # with the failing aggregate, command, classified failure_kind,
+    # script + line. The list is append-only ; a future windowed-count
+    # query (or capability-side reducer) answers "how many
+    # AggregateNotFound failures in the last 60s" — the rhythm the
+    # dream named. Filed as inbox : windowed-count operator in DSL.
+    value_object "NotedConcern" do
+      description "One daemon-dispatch failure observed by a wrapper. Append-only ; queries reduce by failure_kind + noted_at window."
+      attribute :aggregate_name,     String
+      attribute :command_name,       String
+      # failure_kind: AggregateNotFound | GivenFailed | LifecycleViolation | SchemaError | DispatchFailed | HekiWriteFailed
+      attribute :failure_kind,       String
+      attribute :noted_at,           String
+      attribute :script,             String
+      attribute :line,               String
     end
 
     # ============================================================
@@ -87,6 +109,30 @@ Hecks.bluebook "Doctor", version: "2026.05.02.1" do
       emits "DoctorCheckupRecorded"
     end
 
+    command "NoteConcern" do
+      role "System"
+      description "Record one daemon-dispatch failure observed by a body shell wrapper. Append-only — the list IS the history. Doctor's status is NOT touched here (RhythmAssessed-driven ConcernNoted owns the open-alert lifecycle) ; this channel is for the dispatcher's own auscultation : which command failed, in which script, with what classified failure_kind. A later policy windows the list to detect sustained failures."
+      attribute :aggregate_name,     String
+      attribute :command_name,       String
+      attribute :failure_kind,       String
+      attribute :noted_at,           String
+      attribute :script,             String
+      attribute :line,               String
+      then_set :noted_concerns, append: { aggregate_name: :aggregate_name, command_name: :command_name, failure_kind: :failure_kind, noted_at: :noted_at, script: :script, line: :line }
+      then_set :last_checkup_at,     from: :noted_at
+      emits "BodyConcernNoted"
+    end
+
+    command "EscalateSustained" do
+      role "System"
+      description "Emit BodyConcernSustained with the failure_kind + count when a windowed reducer (capability-side, until DSL grows windowed-count) decides the same failure_kind has accumulated past threshold. Until that reducer exists, this command is a documented hook : nothing dispatches it yet, but later listeners can subscribe to BodyConcernSustained without breaking when it lands."
+      attribute :failure_kind,       String
+      attribute :window_count,       Integer
+      attribute :escalated_at,       String
+      then_set :last_checkup_at,     from: :escalated_at
+      emits "BodyConcernSustained"
+    end
+
     # ============================================================
     # QUERIES
     # ============================================================
@@ -97,6 +143,10 @@ Hecks.bluebook "Doctor", version: "2026.05.02.1" do
 
     query "OverallHealth" do
       description "Summarise the doctor's current view : status, concern count, all_steady_since (when the body was last fully healthy). Used by the statusline to render the doctor's verdict."
+    end
+
+    query "ListNotedConcerns" do
+      description "Return the noted_concerns list — every dispatch-failure record observed by the body shell wrappers. Sorted by noted_at descending so the freshest failure is first. Read by the studio Doctor panel + by future window-count reducers that escalate when a failure_kind sustains past threshold."
     end
   end
 

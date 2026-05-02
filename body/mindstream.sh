@@ -75,7 +75,67 @@ CONCEPTION="${CONCEPTION_DIR:-}"
 INFO="${HECKS_INFO:-$DIR/../../miette-state/information}"
 PIDFILE="$INFO/.mindstream.pid"
 
-# Children inherit info-dir routing.
+# ── Error logging ──────────────────────────────────────────────────
+# Dispatch + write failures route to $ERR_LOG (never silenced) so a
+# regression in heki paths, command shapes, or AGG resolution surfaces
+# in seconds rather than days. Read failures and feature probes that
+# legitimately tolerate missing data keep their 2>/dev/null.
+ERR_LOG="${HECKS_DAEMON_ERR_LOG:-$INFO/daemon_errors.log}"
+mkdir -p "$(dirname "$ERR_LOG")" 2>/dev/null || true
+export HECKS_DAEMON_ERR_LOG="$ERR_LOG"
+
+# Wrap a hecks-life dispatch ($HECKS $AGG Aggregate.Command attrs...).
+# stderr lands in $ERR_LOG verbatim ; on non-zero exit a tagged line is
+# appended so a heki-path / AGG / command-shape regression is impossible
+# to miss. stdout passes through untouched so the happy-path JSON
+# responses still flow to the caller.
+#
+# i207 + Doctor wiring : on a real failure we ALSO dispatch
+# Doctor.NoteConcern so the body's auscultation organ records the
+# failure as a NotedConcern — best-effort, no recursion (the Doctor
+# call has || true so its own failure can't cascade back in). Before
+# logging, we short-circuit on `GivenFailed` because those are
+# design-level guards (multi-stage fan-outs where only the
+# phase-appropriate branch mutates), not regressions.
+dispatch() {
+  local stderr rc cmd_full agg_name cmd_name
+  stderr=$("$HECKS" "$AGG" "$@" 2>&1 >/dev/null) ; rc=$?
+  if [ $rc -ne 0 ]; then
+    if printf '%s' "$stderr" | grep -q 'GivenFailed'; then
+      return 0
+    fi
+    printf '%s\n' "$stderr" >>"$ERR_LOG"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $(basename "$0") line ${BASH_LINENO[0]}: dispatch failed: $*" >>"$ERR_LOG"
+    cmd_full="$1"; agg_name="${cmd_full%%.*}"; cmd_name="${cmd_full#*.}"
+    "$HECKS" "$AGG" Doctor.NoteConcern \
+      aggregate_name="$agg_name" command_name="$cmd_name" \
+      failure_kind="DispatchFailed" \
+      script="$(basename "$0")" line="${BASH_LINENO[0]}" \
+      noted_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      >/dev/null 2>>"$ERR_LOG" || true
+    return 1
+  fi
+}
+
+# Wrap a hecks-life heki write (upsert / append / mark). Same routing :
+# stderr verbatim + tagged failure line. Schema mismatches in writes
+# deserve to be loud — silent failure here is what hid the i189 bug.
+# Heki writes don't have a GivenFailed shape, so no short-circuit ;
+# Doctor still gets a NotedConcern on failure (failure_kind=HekiWriteFailed).
+heki_write() {
+  if ! "$HECKS" heki "$@" 2>>"$ERR_LOG"; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $(basename "$0") line ${BASH_LINENO[0]}: heki write failed: $*" >>"$ERR_LOG"
+    "$HECKS" "$AGG" Doctor.NoteConcern \
+      aggregate_name="heki" command_name="$1" \
+      failure_kind="HekiWriteFailed" \
+      script="$(basename "$0")" line="${BASH_LINENO[0]}" \
+      noted_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      >/dev/null 2>>"$ERR_LOG" || true
+    return 1
+  fi
+}
+
+# Children inherit info-dir routing + error-log routing.
 export HECKS_INFO="$INFO"
 export INFO
 
@@ -89,11 +149,22 @@ export INFO
 # inherited environment.
 export HECKS_DAEMON=1
 
+# i212 bandaid : pidfile gate. If another mindstream is already alive,
+# bail with a loud message rather than competing for state. The boot
+# pipeline + manual restarts can both trip this; the live process wins.
+# When a stale pidfile points at a dead pid, claim it.
+if [ -f "$PIDFILE" ]; then
+  prev=$(cat "$PIDFILE" 2>/dev/null)
+  if [ -n "$prev" ] && kill -0 "$prev" 2>/dev/null; then
+    echo "mindstream: another instance is already running (pid $prev) — exiting" >&2
+    exit 0
+  fi
+fi
 echo $$ > "$PIDFILE"
 trap "rm -f $PIDFILE" EXIT
 
 read_state() {
-  $HECKS heki latest-field "$INFO/consciousness.heki" state 2>/dev/null || true
+  $HECKS heki latest-field "$INFO/consciousness/consciousness.heki" state 2>/dev/null || true
 }
 
 loop_count=0
@@ -112,11 +183,11 @@ while true; do
       Consciousness.AdvanceRemToDeepCap \
       Consciousness.AdvanceDeepToLight \
       Consciousness.AdvanceDeepToFinalLight; do
-      $HECKS "$AGG" "$cmd" name=consciousness 2>/dev/null
+      dispatch "$cmd" name=consciousness
     done
-    $HECKS "$AGG" Consciousness.CompleteFinalLight \
+    dispatch Consciousness.CompleteFinalLight \
       name=consciousness \
-      wake_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" 2>/dev/null
+      wake_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
     "$DIR/rem_branch.sh" "$loop_count" 2>/dev/null
     "$DIR/nrem_branch.sh" "$loop_count" 2>/dev/null
@@ -132,7 +203,7 @@ while true; do
   # / RecordMomentOnPulse all subscribe in their own bluebooks.
   # name=tick routes the dispatch to the Tick singleton record
   # (i80 identified_by natural-key contract).
-  $HECKS "$AGG" Tick.MindstreamTick name=tick 2>/dev/null
+  dispatch Tick.MindstreamTick name=tick
 
   # Pulse organs — float math + clamp + multi-record dispatch the
   # DSL doesn't yet express ; stays imperative until those land.
@@ -148,13 +219,13 @@ while true; do
   # filled attrs. Destination : policy `with_attrs` cross-store
   # reads (see capabilities/mindstream/mindstream.bluebook).
   mnum="$loop_count"
-  st=$($HECKS heki latest-field "$INFO/heartbeat.heki" fatigue_state 2>/dev/null); [ -z "$st" ] && st=alert
-  cr=$($HECKS heki latest-field "$INFO/heartbeat.heki" carrying 2>/dev/null)
-  cn=$($HECKS heki latest-field "$INFO/mood.heki" current_state 2>/dev/null)
-  fg=$($HECKS heki latest-field "$INFO/heartbeat.heki" fatigue 2>/dev/null); [ -z "$fg" ] && fg=0.0
-  sy=$($HECKS heki latest-field "$INFO/focus.heki" weight 2>/dev/null); [ -z "$sy" ] && sy=0.0
+  st=$($HECKS heki latest-field "$INFO/heartbeat/heartbeat.heki" fatigue_state 2>/dev/null); [ -z "$st" ] && st=alert
+  cr=$($HECKS heki latest-field "$INFO/heartbeat/heartbeat.heki" carrying 2>/dev/null)
+  cn=$($HECKS heki latest-field "$INFO/mood/mood.heki" current_state 2>/dev/null)
+  fg=$($HECKS heki latest-field "$INFO/heartbeat/heartbeat.heki" fatigue 2>/dev/null); [ -z "$fg" ] && fg=0.0
+  sy=$($HECKS heki latest-field "$INFO/focus/focus.heki" weight 2>/dev/null); [ -z "$sy" ] && sy=0.0
   id=0
-  ex=$($HECKS heki latest-field "$INFO/mood.heki" creativity_level 2>/dev/null); [ -z "$ex" ] && ex=0.0
+  ex=$($HECKS heki latest-field "$INFO/mood/mood.heki" creativity_level 2>/dev/null); [ -z "$ex" ] && ex=0.0
   ag=$(awk -v n="$loop_count" 'BEGIN { printf "%.4f", n/86400.0 }')
   ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
@@ -176,7 +247,7 @@ while true; do
          | tr '\n' '|' | sed 's/|$//')
   fi
 
-  $HECKS "$AGG" Awareness.RecordMoment moment="$mnum" state="$st" carrying="$cr" concept="$cn" fatigue="$fg" synapse_strength="$sy" idle="$id" excitement="$ex" age_days="$ag" updated_at="$ts" inbox_count="$ic" inbox_open_themes="$iot" unfiled_wishes="$uw" 2>/dev/null
+  dispatch Awareness.RecordMoment moment="$mnum" state="$st" carrying="$cr" concept="$cn" fatigue="$fg" synapse_strength="$sy" idle="$id" excitement="$ex" age_days="$ag" updated_at="$ts" inbox_count="$ic" inbox_open_themes="$iot" unfiled_wishes="$uw"
 
   # Dream content during REM ; self-gates on sleep_stage.
   "$DIR/rem_branch.sh" "$loop_count" 2>/dev/null
@@ -198,7 +269,7 @@ while true; do
     "$DIR/mint_musing.sh" >> /tmp/mint_musing.log 2>&1 &
   fi
 
-  idle=$($HECKS heki seconds-since "$INFO/heartbeat.heki" updated_at 2>/dev/null)
+  idle=$($HECKS heki seconds-since "$INFO/heartbeat/heartbeat.heki" updated_at 2>/dev/null)
   [ -z "$idle" ] && idle=999
   if [ "${idle:-999}" -ge 10 ] && [ "${idle:-999}" -le 60 ]; then
     stamp="$INFO/.daydream.last"

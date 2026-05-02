@@ -48,6 +48,50 @@ AGG="${HECKS_AGG:-${AGG:-}}"
   AGG="$(cd "$DIR/../../hecks/hecks_conception/aggregates" && pwd)"
 [ -z "$AGG" ] && AGG="$DIR/../aggregates"
 
+# ── Error logging ──────────────────────────────────────────────────
+# Dispatch + write failures route to $ERR_LOG (never silenced) so a
+# regression in heki paths, command shapes, or AGG resolution surfaces
+# in seconds rather than days. Read failures and feature probes that
+# legitimately tolerate missing data keep their 2>/dev/null.
+ERR_LOG="${HECKS_DAEMON_ERR_LOG:-$INFO/daemon_errors.log}"
+mkdir -p "$(dirname "$ERR_LOG")" 2>/dev/null || true
+
+# i207 + Doctor wiring : short-circuit on GivenFailed (design-level
+# gating, not regression) ; on real failure note Doctor.NoteConcern
+# best-effort. See mindstream.sh for the long-form rationale.
+dispatch() {
+  local stderr rc cmd_full agg_name cmd_name
+  stderr=$("$HECKS" "$AGG" "$@" 2>&1 >/dev/null) ; rc=$?
+  if [ $rc -ne 0 ]; then
+    if printf '%s' "$stderr" | grep -q 'GivenFailed'; then
+      return 0
+    fi
+    printf '%s\n' "$stderr" >>"$ERR_LOG"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $(basename "$0") line ${BASH_LINENO[0]}: dispatch failed: $*" >>"$ERR_LOG"
+    cmd_full="$1"; agg_name="${cmd_full%%.*}"; cmd_name="${cmd_full#*.}"
+    "$HECKS" "$AGG" Doctor.NoteConcern \
+      aggregate_name="$agg_name" command_name="$cmd_name" \
+      failure_kind="DispatchFailed" \
+      script="$(basename "$0")" line="${BASH_LINENO[0]}" \
+      noted_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      >/dev/null 2>>"$ERR_LOG" || true
+    return 1
+  fi
+}
+
+heki_write() {
+  if ! "$HECKS" heki "$@" 2>>"$ERR_LOG"; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $(basename "$0") line ${BASH_LINENO[0]}: heki write failed: $*" >>"$ERR_LOG"
+    "$HECKS" "$AGG" Doctor.NoteConcern \
+      aggregate_name="heki" command_name="$1" \
+      failure_kind="HekiWriteFailed" \
+      script="$(basename "$0")" line="${BASH_LINENO[0]}" \
+      noted_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      >/dev/null 2>>"$ERR_LOG" || true
+    return 1
+  fi
+}
+
 # nursery/ still lives under the conception aggregates dir (mind/).
 # Resolved via $AGG so it follows the aggregates dir wherever that is.
 NURSERY="${NURSERY:-$AGG/../nursery}"
@@ -57,7 +101,7 @@ LOOP="${1:-$(date +%s)}"
 
 # ── Read consciousness state ────────────────────────────────────
 # Single heki latest call, extract all needed fields via jq.
-state_kv=$("$HECKS" heki latest "$INFO/consciousness.heki" 2>/dev/null \
+state_kv=$("$HECKS" heki latest "$INFO/consciousness/consciousness.heki" 2>/dev/null \
   | jq -r '[
       (.state // ""),
       (.sleep_stage // ""),
@@ -348,7 +392,7 @@ if [ "$cycle" = "1" ] && [ "$pulses" = "0" ] && [ ! -f "$SEED_MARKER" ]; then
   now_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   while IFS=$'\t' read -r src seed; do
     [ -z "$seed" ] && continue
-    "$HECKS" "$AGG" DreamSeed.PlantSeed image="$seed" last_seeded_at="$now_iso" >/dev/null 2>&1
+    dispatch DreamSeed.PlantSeed image="$seed" last_seeded_at="$now_iso" >/dev/null
     printf '%s\n' "$src" >>"$SOURCES_TOUCHED"
     printf '%s\t%s\n' "$now_ts" "$seed" >>"$SEED_HISTORY"
   done <"$SELECTED"
@@ -379,7 +423,7 @@ fi
 # Templates are deliberately poetic, French-inflected: comma-splice,
 # em-dash, sudden image-shift, occasional untranslated word. No
 # productive "X became Y" syntax.
-carrying=$("$HECKS" heki latest-field "$INFO/heartbeat.heki" carrying 2>/dev/null)
+carrying=$("$HECKS" heki latest-field "$INFO/heartbeat/heartbeat.heki" carrying 2>/dev/null)
 # Trim whitespace; fall back to "unformed" for empty/missing/null.
 carrying="${carrying#"${carrying%%[![:space:]]*}"}"
 carrying="${carrying%"${carrying##*[![:space:]]}"}"
@@ -552,16 +596,16 @@ english_image="$(translate_to_english "$french_image")"
 # dreaming voice for post-wake interpretation. Direct heki append
 # (no dispatch path) because there's no DreamState aggregate to
 # dispatch through — the corpus is the substrate, not the model.
-"$HECKS" heki append "$INFO/dream_state.heki" \
+heki_write append "$INFO/dream_state.heki" \
   --reason "rem_branch : authentic French dream image, corpus record for wake interpretation" \
-  dream_images="$french_image" cycle="$LOOP" source="mindstream" >/dev/null 2>&1
+  dream_images="$french_image" cycle="$LOOP" source="mindstream" >/dev/null
 
 # Dispatch DreamPulse with ENGLISH translation — status bar narrates
 # in the user's language while the stored corpus stays French.
 prefix="💭"
 [ "$lucid" = "yes" ] && prefix="✨"
-"$HECKS" "$AGG" Consciousness.DreamPulse \
-  consciousness="$cid" impression="$prefix $english_image" >/dev/null 2>&1
+dispatch Consciousness.DreamPulse \
+  consciousness="$cid" impression="$prefix $english_image" >/dev/null
 
 # ── lucid_dream narration — rich first-person when aware ───────────────
 #
@@ -578,8 +622,8 @@ if [ "$lucid" = "yes" ]; then
     # Fallback : phrase the image in the canonical lucid shape.
     english_obs="I'm dreaming about $english_image — let's see where this goes."
   fi
-  "$HECKS" "$AGG" LucidDream.ObserveDream observation="$english_obs" >/dev/null 2>&1
+  dispatch LucidDream.ObserveDream observation="$english_obs" >/dev/null
   # SteerDream targets the self-aggregate we're inside, first-person.
-  "$HECKS" "$AGG" LucidDream.SteerDream \
-    toward="I'd like to go deeper into $self_domain with this" >/dev/null 2>&1
+  dispatch LucidDream.SteerDream \
+    toward="I'd like to go deeper into $self_domain with this" >/dev/null
 fi

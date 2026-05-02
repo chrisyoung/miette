@@ -45,6 +45,50 @@ INFO="${HECKS_INFO:-$DIR/information}"
 AGG="${HECKS_AGG:-$DIR/aggregates}"
 HECKS="${HECKS_BIN:-$DIR/../rust/target/release/hecks-life}"
 
+# ── Error logging ──────────────────────────────────────────────────
+# Dispatch + write failures route to $ERR_LOG (never silenced) so a
+# regression in heki paths, command shapes, or AGG resolution surfaces
+# in seconds rather than days. Read failures and feature probes that
+# legitimately tolerate missing data keep their 2>/dev/null.
+ERR_LOG="${HECKS_DAEMON_ERR_LOG:-$INFO/daemon_errors.log}"
+mkdir -p "$(dirname "$ERR_LOG")" 2>/dev/null || true
+
+# i207 + Doctor wiring : short-circuit on GivenFailed (design-level
+# gating, not regression) ; on real failure note Doctor.NoteConcern
+# best-effort. See mindstream.sh for the long-form rationale.
+dispatch() {
+  local stderr rc cmd_full agg_name cmd_name
+  stderr=$("$HECKS" "$AGG" "$@" 2>&1 >/dev/null) ; rc=$?
+  if [ $rc -ne 0 ]; then
+    if printf '%s' "$stderr" | grep -q 'GivenFailed'; then
+      return 0
+    fi
+    printf '%s\n' "$stderr" >>"$ERR_LOG"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $(basename "$0") line ${BASH_LINENO[0]}: dispatch failed: $*" >>"$ERR_LOG"
+    cmd_full="$1"; agg_name="${cmd_full%%.*}"; cmd_name="${cmd_full#*.}"
+    "$HECKS" "$AGG" Doctor.NoteConcern \
+      aggregate_name="$agg_name" command_name="$cmd_name" \
+      failure_kind="DispatchFailed" \
+      script="$(basename "$0")" line="${BASH_LINENO[0]}" \
+      noted_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      >/dev/null 2>>"$ERR_LOG" || true
+    return 1
+  fi
+}
+
+heki_write() {
+  if ! "$HECKS" heki "$@" 2>>"$ERR_LOG"; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $(basename "$0") line ${BASH_LINENO[0]}: heki write failed: $*" >>"$ERR_LOG"
+    "$HECKS" "$AGG" Doctor.NoteConcern \
+      aggregate_name="heki" command_name="$1" \
+      failure_kind="HekiWriteFailed" \
+      script="$(basename "$0")" line="${BASH_LINENO[0]}" \
+      noted_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      >/dev/null 2>>"$ERR_LOG" || true
+    return 1
+  fi
+}
+
 now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 promoted_signals=0
@@ -56,8 +100,8 @@ archived_musings=0
 # kind != archived. For each: append to store.heki (Memory.StoreMemory
 # schema), then dispatch Signal.ArchiveSignal.
 
-if [ -f "$INFO/signal.heki" ]; then
-  PROMOTE_PLAN=$("$HECKS" heki list "$INFO/signal.heki" --format json 2>/dev/null \
+if [ -f "$INFO/signal/signal.heki" ]; then
+  PROMOTE_PLAN=$("$HECKS" heki list "$INFO/signal/signal.heki" --format json 2>/dev/null \
     | jq -r --arg now "$now" '
         def iso_to_epoch:
           . as $s | ($s | fromdateiso8601);
@@ -76,11 +120,11 @@ if [ -f "$INFO/signal.heki" ]; then
 
   while IFS='|' read -r sid kind payload created_at; do
     [ -z "$sid" ] && continue
-    "$HECKS" heki append "$INFO/store.heki" \
+    heki_write append "$INFO/store/store.heki" \
       --reason "consolidate : promote a hot signal into long-term memory" \
       kind="$kind" payload="$payload" source=signal \
-      created_at="$created_at" >/dev/null 2>&1
-    "$HECKS" "$AGG" Signal.ArchiveSignal signal="$sid" >/dev/null 2>&1
+      created_at="$created_at" >/dev/null
+    dispatch Signal.ArchiveSignal signal="$sid" >/dev/null
     promoted_signals=$((promoted_signals + 1))
   done <<<"$PROMOTE_PLAN"
 fi
@@ -90,8 +134,8 @@ fi
 # sweep catches any alive synapse that slipped below 0.1 without being
 # caught (e.g. if decay was skipped).
 
-if [ -f "$INFO/synapse.heki" ]; then
-  COMPOST_PLAN=$("$HECKS" heki list "$INFO/synapse.heki" \
+if [ -f "$INFO/synapse/synapse.heki" ]; then
+  COMPOST_PLAN=$("$HECKS" heki list "$INFO/synapse/synapse.heki" \
       --where state=alive --format json 2>/dev/null \
     | jq -r '.[]
              | select((.strength // 0) < 0.1)
@@ -104,13 +148,13 @@ if [ -f "$INFO/synapse.heki" ]; then
 
   while IFS='|' read -r sid strength firings from_topic; do
     [ -z "$sid" ] && continue
-    "$HECKS" "$AGG" Synapse.Compost synapse="$sid" >/dev/null 2>&1
-    "$HECKS" heki append "$INFO/remains.heki" \
+    dispatch Synapse.Compost synapse="$sid" >/dev/null
+    heki_write append "$INFO/remains/remains.heki" \
       --reason "consolidate : capture composted synapse's dying values for the remains corpus" \
       from_synapse="$from_topic" \
       strength_at_death="$strength" \
       firings="$firings" \
-      died_at="$now" >/dev/null 2>&1
+      died_at="$now" >/dev/null
     composted_synapses=$((composted_synapses + 1))
   done <<<"$COMPOST_PLAN"
 fi
@@ -122,8 +166,8 @@ fi
 # created_at. Archive via heki append to musing_archive.heki; mark the
 # original with `heki mark --where id=... --set status=archived`.
 
-if [ -f "$INFO/musing.heki" ]; then
-  ARCHIVE_PLAN=$("$HECKS" heki list "$INFO/musing.heki" --format json 2>/dev/null \
+if [ -f "$INFO/musing/musing.heki" ]; then
+  ARCHIVE_PLAN=$("$HECKS" heki list "$INFO/musing/musing.heki" --format json 2>/dev/null \
     | jq -r '
         # Pull concept from thinking_source → feeling_source → source.
         def concept_of:
@@ -150,14 +194,14 @@ if [ -f "$INFO/musing.heki" ]; then
 
   while IFS='|' read -r mid idea source concept; do
     [ -z "$mid" ] && continue
-    "$HECKS" heki append "$INFO/musing_archive.heki" \
+    heki_write append "$INFO/musing_archive/musing_archive.heki" \
       --reason "consolidate : archive duplicate-concept musing — keep the older, retire the rest" \
       idea="$idea" source="$source" concept="$concept" \
-      archived_reason="duplicate_concept" archived_at="$now" >/dev/null 2>&1
+      archived_reason="duplicate_concept" archived_at="$now" >/dev/null
     # Mark the original musing archived so it's not re-counted next sweep.
-    "$HECKS" heki mark "$INFO/musing.heki" --where "id=$mid" \
+    heki_write mark "$INFO/musing/musing.heki" --where "id=$mid" \
       --set status=archived \
-      --reason "consolidate : flag the original musing archived so duplicate-concept sweep doesn't re-count it" >/dev/null 2>&1
+      --reason "consolidate : flag the original musing archived so duplicate-concept sweep doesn't re-count it" >/dev/null
     archived_musings=$((archived_musings + 1))
   done <<<"$ARCHIVE_PLAN"
 fi
