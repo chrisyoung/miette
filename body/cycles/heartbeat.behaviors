@@ -22,9 +22,11 @@ Hecks.behaviors "Heartbeat" do
 
   test "AccumulateFatigue increments but does not walk the ladder" do
     # Ladder-walking moved to BecomeX commands guarded by
-    # pulses_since_sleep thresholds. A single tick from alert must stay alert.
+    # pulses_since_sleep thresholds. The default (just-woken) state is
+    # "rested" since the i201 closure ; a single tick must stay there
+    # until BecomeAlert walks rested → alert at the 10-pulse threshold.
     tests "AccumulateFatigue", on: "Heartbeat"
-    expect fatigue_state: "alert"
+    expect fatigue_state: "rested"
   end
 
   test "BecomeFocused refused before threshold" do
@@ -79,10 +81,14 @@ Hecks.behaviors "Heartbeat" do
     expect sleep_mode: "manual"
   end
 
-  test "RecoverFatigue resets to alert" do
+  test "RecoverFatigue resets to rested" do
+    # Post-i201 — RecoverFatigue lands at "rested" (the felt state of
+    # just-woken). BecomeAlert walks rested → alert at the 10-pulse
+    # threshold, separately. Previously this test expected "alert"
+    # directly, which left "rested" unreachable through the ladder.
     tests "RecoverFatigue", on: "Heartbeat"
     setup  "AccumulateFatigue"
-    expect pulses_since_sleep: 0, fatigue: 0.0, fatigue_state: "alert"
+    expect pulses_since_sleep: 0, fatigue: 0.0, fatigue_state: "rested"
   end
 
   test "ReadVitals returns matching records" do
