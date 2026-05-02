@@ -35,5 +35,21 @@ Hecks.bluebook "Arc", version: "2026.04.26.1" do
       then_set :pulse_count, to: 0
       emits "PhaseShifted"
     end
+
+    # ============================================================
+    # Specifications — DDD reusable predicates (i128 closure)
+    # ============================================================
+
+    specification :rising do |arc|
+      arc.momentum.to_f > 0.5
+    end
+
+    specification :falling do |arc|
+      arc.momentum.to_f < -0.5
+    end
+
+    specification :steady do |arc|
+      arc.momentum.to_f.abs <= 0.5
+    end
   end
 end
