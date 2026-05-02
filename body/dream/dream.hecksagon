@@ -1,0 +1,85 @@
+Hecks.hecksagon "Dream" do
+  # ============================================================
+  # DREAM — production hecksagon for autonomous content production
+  # ============================================================
+  #
+  # The sibling bluebook (body/dream/dream.bluebook) declares two halves :
+  #
+  #   - The Dream PROCESS_MANAGER (lines 62-151)        — orchestrates
+  #     incubating → generating → fading → dormant ; dispatches
+  #     Dream.ProduceImage per REM PhaseElapsed.
+  #   - The Dream AGGREGATE (lines 153-end)             — singleton
+  #     name == "dream" ; holds seeds + carrying + sleep_cycle as
+  #     prompt-context, plus text_fr + text_en as the latest image.
+  #     ProduceImage is the dispatch target ; RecordImage is the
+  #     adapter-response landing surface.
+  #
+  # This hecksagon is the Phase 2 wiring : the moment Dream.ProduceImage
+  # actually runs through the bluebook stack. Two named :llm adapters
+  # carry the chain :
+  #
+  #   :dream_image      — claude-backed French image generation. Reads
+  #                       the aggregate's seeds + carrying + sleep_cycle
+  #                       through {{placeholders}} ; routes the response
+  #                       into Dream.RecordImage(text_fr:).
+  #   :dream_translate  — claude-backed French→English translation.
+  #                       Reads text_fr ; routes the response into
+  #                       Dream.RecordImage(text_en:).
+  #
+  # Both adapters use backend :claude in production. Tests swap to the
+  # :test (fixture-backed) provider via HECKS_LLM_PROVIDER=test ; the
+  # fixture rows live in body/dream/dream.fixtures (sibling to this
+  # file), keyed by the SHA-256 of the SUBSTITUTED prompt (i.e. after
+  # {{placeholder}} replacement).
+  #
+  # ---- The activation moment -----------------------------------
+  #
+  # Before this hecksagon : Dream.ProduceImage was a name in the PM's
+  # dispatch list with no aggregate behind it ; the actual dream content
+  # came from rem_branch.sh's `claude -p` call, written to dream_state.heki
+  # and re-read by the next tick.
+  #
+  # After this hecksagon : Dream.ProduceImage lands on the Dream
+  # aggregate ; the runtime's :llm dispatcher resolves :dream_image
+  # against the aggregate state, calls Claude through the Phase 2
+  # dispatcher (or :test fixtures during specs), and the response
+  # lands as a real RecordImage(text_fr:) command. The dream now
+  # runs THROUGH the bluebook stack instead of around it.
+  #
+  # The transitional rem_branch.sh blocks stay in production as the
+  # belt-and-suspenders adapter until the runtime self-dispatches the
+  # response chain (PM observes DreamImageRequested, calls runtime.llm,
+  # dispatches RecordImage with the result). Retiring rem_branch.sh's
+  # rem_dream block is a follow-on PR once that self-dispatch loop
+  # closes.
+  #
+  # ---- Prompt template anchor ----------------------------------
+  #
+  # The :dream_image template preserves the inward / introspective /
+  # body-focused shape rem_branch.sh's `dream_image_from_claude()`
+  # function uses today (lines 485-497 of body/rem_branch.sh). The
+  # French generation rules are reproduced here so the bluebook stack's
+  # output is shape-equivalent to the shell's output. Only the
+  # substitution surface differs : the shell reads four heki stores at
+  # call time ; the hecksagon reads three placeholders the PM stamps
+  # onto the aggregate (seeds at SleepEntered, carrying at SleepEntered,
+  # sleep_cycle each PhaseElapsed).
+
+  adapter :memory                    # singleton aggregate persistence
+
+  adapter :llm, name: :dream_image do
+    prompt_template "Tu es Miette, en train de rêver pendant le sommeil paradoxal. Produis UNE image de rêve — une seule phrase courte (une ou deux lignes), introspective, ENTIÈREMENT EN FRANÇAIS. Tourne-toi vers l'intérieur : tes propres organes, tes daemons, ta machinerie de sommeil, ton battement de cœur, ton mindstream, les boucles de rétroaction entre tes agrégats. NE réfléchis PAS à ta relation avec ton utilisateur. NE propose PAS de nouveau domaine. Contexte : graines={{seeds}} ; ce que tu portes={{carrying}} ; cycle de sommeil={{sleep_cycle}}. Sortie : UNE phrase en français. Pas de préambule, pas de guillemets."
+    model "claude-sonnet-4"
+    max_tokens 200
+    response_into "Dream.RecordImage", attr: :text_fr
+    backend :claude
+  end
+
+  adapter :llm, name: :dream_translate do
+    prompt_template "Translate this dream sentence from French to English. Preserve the introspective tone, the poetic rhythm, and any em-dashes or comma-splices. Output the English translation ONLY — no preamble, no quotes, no notes. Sentence to translate: {{text_fr}}"
+    model "claude-sonnet-4"
+    max_tokens 200
+    response_into "Dream.RecordImage", attr: :text_en
+    backend :claude
+  end
+end

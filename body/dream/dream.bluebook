@@ -149,6 +149,90 @@ Hecks.bluebook "BodyDream", version: "2026.05.02.1" do
       # state-transition only ; ends_on archives the instance
     end
   end
+
+  # ============================================================
+  # DREAM AGGREGATE — the content-bearing target of ProduceImage
+  # ============================================================
+  #
+  # The Dream PM dispatches `Dream.ProduceImage` per REM tick. That
+  # command lands here. The :llm adapter declared in the sibling
+  # body/dream/dream.hecksagon resolves the prompt template against
+  # ProduceImage's attrs, then routes the generated French image into
+  # `Dream.RecordImage(text_fr:)`. A second :llm adapter then translates
+  # text_fr → English and lands `Dream.RecordImage(text_en:)`.
+  #
+  # The aggregate is a thin per-night singleton (identified_by :name,
+  # name == "dream") holding the LATEST image so the statusline +
+  # WakeReport reads pull from one place. The full corpus persistence
+  # (DreamImage entity rows) lives in DreamCorpus when that aggregate
+  # exists ; until then, the singleton's text_fr / text_en pair is the
+  # canonical "current image" surface during REM.
+  #
+  # Why a singleton, not an entity-per-tick :
+  #   The PM is the orchestrator ; per-tick history is the corpus
+  #   aggregate's job (future DreamCorpus). Dream itself just holds
+  #   the live tick's text + the seed material so the next tick's
+  #   prompt template can reference what's planted.
+
+  aggregate "Dream", "Autonomous dream-content state during REM. Singleton (name == 'dream'). Holds the seeds the night opened with, the carrying field, the current sleep_cycle, and the most-recent image (French + English). The PM (above) dispatches ProduceImage per REM tick ; the :llm adapter routes the generated French into RecordImage(text_fr:) and a second :llm adapter routes the translation into RecordImage(text_en:)." do
+    identified_by :name
+    attribute :name, String
+
+    # ---- Seed material for the prompt template -------------------
+    # seeds : the night's planted seeds (joined as a single comma-
+    # separated string for the {{seeds}} placeholder). Stamped at
+    # SleepEntered ; stays stable across the night's REM ticks.
+    attribute :seeds, String, default: ""
+
+    # carrying : Heartbeat.carrying — what Miette is currently holding
+    # as she dreams. Read into the prompt's {{carrying}} placeholder.
+    attribute :carrying, String, default: ""
+
+    # ---- Tick-local context --------------------------------------
+    # sleep_cycle : the REM cycle this image is for (1..8). Updated
+    # by ProduceImage each tick ; surfaced in the prompt's
+    # {{sleep_cycle}} placeholder so the dream-character voice can
+    # reference the night's progress.
+    attribute :sleep_cycle, Integer, default: 0
+
+    # ---- The most-recent image (French + English) ---------------
+    attribute :text_fr, String, default: ""
+    attribute :text_en, String, default: ""
+
+    command "ProduceImage" do
+      role "Daemon"
+      description "Per-tick dream-image production. Dispatched by the Dream PM on each PhaseElapsed during REM (state == generating). The runtime resolves the named :llm adapter (:dream_image) against the aggregate's seeds + carrying + sleep_cycle, generates one French sentence, and routes the response into RecordImage(text_fr:). Idempotent within a tick : the PM only dispatches once per PhaseElapsed."
+      attribute :sleep_cycle, Integer
+      then_set :sleep_cycle, to: :sleep_cycle
+      emits "DreamImageRequested"
+    end
+
+    command "RecordImage" do
+      role "System"
+      description "Land the :llm adapter's response into the aggregate. text_fr is written by the :dream_image adapter ; text_en is written by the :dream_translate adapter (both declared in body/dream/dream.hecksagon). Either attribute may be passed in isolation — RecordImage updates only what it receives. Both adapters' response_into target this command."
+      attribute :text_fr, String
+      attribute :text_en, String
+      then_set :text_fr, to: :text_fr
+      then_set :text_en, to: :text_en
+      emits "DreamImageRecorded"
+    end
+
+    # PlantSeeds is the surface the seed-draw resolves into. The
+    # 10-source pool (awareness, inbox, commits, older_dream, nursery,
+    # aggregate, vow, musing, french_lit, carrying) joins to a single
+    # comma-separated string the {{seeds}} placeholder expands. Today
+    # rem_branch.sh resolves the pool ; once per-source queries land
+    # first-class, the PM dispatches PlantSeeds directly.
+    command "PlantSeeds" do
+      role "Daemon"
+      description "Stamp the night's seed material onto the singleton. seeds is a comma-separated join of the 10-source pool's chosen entries ; carrying is Heartbeat.carrying at SleepEntered. Both populate the prompt template the :dream_image adapter resolves each tick."
+      attribute :seeds, String
+      attribute :carrying, String
+      then_set :seeds, to: :seeds
+      then_set :carrying, to: :carrying
+      emits "DreamSeedsPlanted"
+    end
+  end
 end
 
 # ----- Notes for the Phase 6 PR --------------------------------

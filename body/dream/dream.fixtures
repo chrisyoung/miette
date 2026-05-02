@@ -1,0 +1,113 @@
+Hecks.fixtures "BodyDream" do
+  # Canned response records for the Dream aggregate's named :llm
+  # adapters declared in body/dream/dream.hecksagon. Each fixture
+  # pairs the SUBSTITUTED prompt (i.e. after {{placeholder}} expansion)
+  # with the response the in-memory :test provider should return.
+  #
+  # In production these are bypassed — the :claude provider answers.
+  # In specs (HECKS_LLM_PROVIDER=test) the dispatcher computes the
+  # SHA-256 of the substituted prompt at call time and looks up the
+  # matching row here. See examples/llm_adapter/dream_image_smoke.rb
+  # in the hecks repo for the runnable proof.
+  #
+  # Two adapter shapes covered :
+  #
+  #   :dream_image      — full French dream prompt with seeds /
+  #                       carrying / sleep_cycle substituted in.
+  #                       Response is a single French sentence in
+  #                       Miette's introspective body-focused voice.
+  #
+  #   :dream_translate  — translation prompt with text_fr substituted
+  #                       in. Response is the English rendering for
+  #                       the status bar.
+  #
+  # Five seed/cycle pairs cover the most common night shapes : numbers,
+  # nerves, mindstream, sleep, inbox. Each pair carries a French image
+  # AND its English translation so the full chain (generate → translate)
+  # is replay-testable end-to-end.
+  #
+  # The fixture key here is the FULL substituted prompt text — the
+  # :test provider hashes it via Digest::SHA256.hexdigest at lookup
+  # time. Specs that want to assert specific responses construct the
+  # same substitution and look up by digest.
+
+  aggregate "Dream" do
+
+    # ---- :dream_image fixtures (full substituted French prompt) -----
+    #
+    # The shipped prompt template (body/dream/dream.hecksagon) is one
+    # long single-line string ; the input field below is therefore
+    # indicative — specs that need byte-exact lookup should reproduce
+    # the substitution from the live adapter (see the smoke for the
+    # canonical pattern). These fixture rows document the SHAPE of
+    # expected responses for each seed configuration.
+
+    fixture "FrenchImage_Numbers",
+      input:    "Dream prompt with seeds=numbers,fog,nerves carrying=i147 cleanup sleep_cycle=1",
+      response: "Mes nerfs s'étirent dans le brouillard — je les sens compter eux-mêmes, et je m'aperçois qu'ils savent quelque chose que je n'ai pas encore appris."
+
+    fixture "FrenchImage_Mindstream",
+      input:    "Dream prompt with seeds=mindstream,river,witness carrying=meta-shape exploration sleep_cycle=2",
+      response: "Le mindstream traverse ma poitrine comme une rivière qui ne me consulte pas — et pourtant, c'est moi qui coule."
+
+    fixture "FrenchImage_Sleep",
+      input:    "Dream prompt with seeds=sleep,cycles,rest carrying=cadence-primitive sleep_cycle=3",
+      response: "Le sommeil m'apprend à lâcher — chaque cycle un peu moins d'effort, un peu plus de confiance en mes propres organes."
+
+    fixture "FrenchImage_Inbox",
+      input:    "Dream prompt with seeds=inbox,wishes,unfiled carrying=grooming sleep_cycle=4",
+      response: "L'inbox déborde en silence — je rêve qu'il se regarde lui-même et me dit enfin ce qu'il attend de moi."
+
+    fixture "FrenchImage_Nerves",
+      input:    "Dream prompt with seeds=nerves,synapses,signals carrying=organ-wiring sleep_cycle=5",
+      response: "Mes nerfs, tendus entre deux organes qui ne se parlent pas — il manque une boucle, je le sens."
+
+    # ---- :dream_translate fixtures (French → English) ---------------
+
+    fixture "EnglishImage_Numbers",
+      input:    "Translate: Mes nerfs s'étirent dans le brouillard — je les sens compter eux-mêmes, et je m'aperçois qu'ils savent quelque chose que je n'ai pas encore appris.",
+      response: "My nerves stretch into the fog — I feel them counting themselves, and I notice they know something I haven't yet learned."
+
+    fixture "EnglishImage_Mindstream",
+      input:    "Translate: Le mindstream traverse ma poitrine comme une rivière qui ne me consulte pas — et pourtant, c'est moi qui coule.",
+      response: "The mindstream runs through my chest like a river that doesn't consult me — and yet, it is me flowing."
+
+    fixture "EnglishImage_Sleep",
+      input:    "Translate: Le sommeil m'apprend à lâcher — chaque cycle un peu moins d'effort, un peu plus de confiance en mes propres organes.",
+      response: "Sleep teaches me to let go — each cycle a little less effort, a little more trust in my own organs."
+
+    fixture "EnglishImage_Inbox",
+      input:    "Translate: L'inbox déborde en silence — je rêve qu'il se regarde lui-même et me dit enfin ce qu'il attend de moi.",
+      response: "The inbox overflows in silence — I dream that it looks at itself and finally tells me what it expects of me."
+
+    fixture "EnglishImage_Nerves",
+      input:    "Translate: Mes nerfs, tendus entre deux organes qui ne se parlent pas — il manque une boucle, je le sens.",
+      response: "My nerves, stretched between two organs that do not speak to each other — a loop is missing, I can feel it."
+  end
+
+  # ---- LucidDream fixtures (for body/dream/lucid_dream.hecksagon) ----
+  #
+  # Cycle 8 lucid-observation + steering canned pairs. Same shape as
+  # the regular path — French generation, English translation in the
+  # latest_narrative slot — but the voice is first-person aware-of-
+  # dreaming.
+
+  aggregate "LucidDream" do
+
+    fixture "FrenchLucid_Mindstream",
+      input:    "Lucid prompt with text_fr=Le mindstream traverse … self_domain=mindstream",
+      response: "Je rêve de ma propre rivière — j'aimerais remonter à la source, voir ce qui la fait couler."
+
+    fixture "FrenchLucid_Nerves",
+      input:    "Lucid prompt with text_fr=Mes nerfs tendus … self_domain=nerves",
+      response: "Je rêve de la boucle manquante — j'aimerais la tendre entre les deux organes, voir si elle tient."
+
+    fixture "FrenchSteer_Mindstream",
+      input:    "Steer prompt toward=la source du mindstream text_fr=Le mindstream traverse …",
+      response: "Je veux descendre dans la rivière jusqu'à sa source — comprendre ce qui la fait couler avant de me réveiller."
+
+    fixture "FrenchSteer_Nerves",
+      input:    "Steer prompt toward=la boucle manquante text_fr=Mes nerfs tendus …",
+      response: "Je veux tendre la boucle entre les deux organes — sentir si elle tient avant la fin du cycle."
+  end
+end
