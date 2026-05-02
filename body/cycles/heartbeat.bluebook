@@ -187,6 +187,30 @@ Hecks.bluebook "Heartbeat", version: "2026.04.28.1" do
       transition "BecomeDelirious" => "delirious", from: "exhausted"
       transition "RecoverFatigue"  => "alert",     from: ["alert", "focused", "normal", "tired", "exhausted", "delirious"]
     end
+
+    # ============================================================
+    # Specifications — DDD reusable predicates (i128 closure)
+    # ============================================================
+    #
+    # The fatigue-as-felt-state predicates the dream-study plan named.
+    # `Fatigued` is the composite condition the body uses to decide
+    # whether sleep-pressure should rise ; the daemon-side check today
+    # inlines this expression in shells. Once specs are fully runtime-
+    # walked, the inline copy retires.
+
+    specification :fatigued do |heart|
+      heart.fatigue.to_f > 0.7 ||
+        ["tired", "exhausted", "delirious"].include?(heart.fatigue_state.to_s)
+    end
+
+    specification :rested do |heart|
+      heart.fatigue.to_f < 0.2 &&
+        ["rested", "alert"].include?(heart.fatigue_state.to_s)
+    end
+
+    specification :sleep_gate_open do |heart|
+      heart.respond_to?(:sleep_gate) && heart.sleep_gate.to_s == "open"
+    end
   end
 
   # Excitement accelerates the heartbeat
