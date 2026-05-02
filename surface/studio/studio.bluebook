@@ -248,6 +248,14 @@ Hecks.bluebook "Studio", version: "2026.05.01.1" do
   # bluebook, not in fifteen scattered shell scripts.
 
   aggregate "StatuslineSnapshot", "Singleton — the exact JSON shape /statusline returns. Updated on every TickedFeature heartbeat via OnTickUpdateStatusline. Fixed schema so the bar's parser never breaks under cadence change." do
+    # i189 fix (2026-05-02) : identified_by :name with a fixed default makes
+    # Update route to the singleton slot ; previously Update appended a new
+    # row each tick, leaving the 'singleton' as 'latest of N' rather than
+    # 'one row updated in place'. The renderer reads payload_json from the
+    # latest row in either case so the byte-output is identical, but the
+    # storage shape now matches the aggregate's declared intent.
+    identified_by :name
+    attribute :name,         String, default: "statusline"
     attribute :payload_json, String
     attribute :updated_at,   String
 

@@ -66,15 +66,15 @@ RSpec.describe "Dispatch lookup (i189, i203, i204)" do
       end
 
       rows = h.heki_all("studio/statusline_snapshot.heki")
-      # PENDING : StatuslineSnapshot has no identified_by — every Update
-      # appends a new row. Lock the current behaviour so the bug is
-      # visible until it's fixed (likely via identified_by :name on the
-      # singleton).
-      pending "i189 — StatuslineSnapshot is a singleton in spirit but " \
-              "the bluebook declares no identified_by ; each Update " \
-              "appends. Fix in a follow-up — add identified_by + a " \
-              "default name=\"statusline\"."
-      expect(rows.size).to eq(1)
+      # FIXED 2026-05-02 : surface/studio/studio.bluebook now declares
+      # identified_by :name with attribute :name default "statusline".
+      # Update routes to the singleton slot ; three Updates produce one
+      # row, not three.
+      expect(rows.size).to eq(1), "i189 expected 1 singleton row, got #{rows.size}"
+
+      row = rows.values.first
+      expect(row["payload_json"]).to eq(%({"tick":2})), "expected last write to win"
+      expect(row["updated_at"]).to   eq("2026-05-01T00:00:02Z")
     end
   end
 
