@@ -1,4 +1,4 @@
-Hecks.bluebook "MusingMint", version: "2026.04.28.1" do
+Hecks.bluebook "MusingMint", version: "2026.05.02.1" do
   vision "Minting curated musings — only really great ideas. Quality requires curation; the LLM adapter is the filter."
   category "body"
 
@@ -12,6 +12,27 @@ Hecks.bluebook "MusingMint", version: "2026.04.28.1" do
   # each body pulse to keep the stream from growing repetitive.
   #
   # Lifted out of mindstream.bluebook in i112.
+  #
+  # i75 — claude-direct retirement.
+  # body/mint_musing.sh used to call `claude -p` directly to
+  # mint each musing. The retirement collapses that into the
+  # bluebook stack : the named :mint_idea adapter (declared in
+  # mind/musing_mint/musing_mint.hecksagon) fires when
+  # MusingMint.MintMusing dispatches, substitutes the cross-
+  # aggregate prompt context placeholders against the fields
+  # below, calls Claude through ClaudeProvider, and chains the
+  # response back as MusingMint.MintMusing(idea: <response>) via
+  # response_into. The shell shrinks to : gather context →
+  # dispatch RecordContext (stamps the 5 context fields) →
+  # dispatch MintMusing (no idea — the LLM fills it).
+  #
+  # Known artifact : MintMusing fires twice per cycle (once
+  # top-level with empty idea to trigger the resolver, once via
+  # cascade with the LLM's response). total_minted increments
+  # by 2 per success ; last_minted lands the real idea on the
+  # second fire so end state is correct. Filed for follow-up :
+  # the resolver could honor a `given { idea != "" }` gate
+  # without short-circuiting the LLM call.
 
   aggregate "MusingMint", "Minting new musings — only really great ideas. Random domain collisions produce noise; quality requires curation. Claude (or any LLM adapter wired in via ClaudeAssist) is the quality filter." do
     identified_by :name
@@ -20,8 +41,53 @@ Hecks.bluebook "MusingMint", version: "2026.04.28.1" do
     attribute :last_source, String
     attribute :total_minted, Integer
 
+    # ---- Prompt-context fields (i75) ------------------------------
+    # Stamped by RecordContext before each MintMusing cycle ; read
+    # by the :mint_idea adapter's prompt template via {{placeholders}}.
+    # Each is a pre-formatted string the shell assembles (the shell
+    # already has the heki/jq pipelines that produce the right
+    # shape ; the bluebook just stores the assembled text).
+
+    # Comma- or newline-separated last 10 ideas from musing.heki —
+    # the curator must avoid paraphrasing these.
+    attribute :recent_musings_summary, String, default: ""
+
+    # Newline-separated last 10 git log oneline entries from the
+    # conception repo — grounds the mint in current focus.
+    attribute :recent_commits, String, default: ""
+
+    # Newline-separated up-to-20 conversation turns since
+    # last_wake_at on consciousness.heki — Chris+Miette exchanges
+    # between sleep cycles.
+    attribute :conversations_summary, String, default: ""
+
+    # Newline-separated 12-name random sample from nursery/.
+    # Combining two of these for a fresh insight is the primary
+    # minting path.
+    attribute :nursery_sample, String, default: ""
+
+    # Multi-line summary of beats / fatigue / mood / consciousness
+    # state / sleep stage / latest lucid observation. Body-state
+    # ground for the curator's voice.
+    attribute :state_snapshot, String, default: ""
+
+    command "RecordContext" do
+      description "Stamp the five prompt-context fields onto MusingMint before MintMusing fires. The :mint_idea adapter's template reads them via {{placeholders}}. The shell assembles each field's text from heki / git / nursery sources ; the aggregate just holds the assembled strings."
+      attribute :recent_musings_summary, String
+      attribute :recent_commits, String
+      attribute :conversations_summary, String
+      attribute :nursery_sample, String
+      attribute :state_snapshot, String
+      then_set :recent_musings_summary, to: :recent_musings_summary
+      then_set :recent_commits,         to: :recent_commits
+      then_set :conversations_summary,  to: :conversations_summary
+      then_set :nursery_sample,         to: :nursery_sample
+      then_set :state_snapshot,         to: :state_snapshot
+      emits "ContextRecorded"
+    end
+
     command "MintMusing" do
-      description "Record a curated musing — the idea has been judged good enough to keep"
+      description "Record a curated musing — the idea has been judged good enough to keep. i75 : also the chain target for the :mint_idea adapter ; the top-level dispatch (idea unset) triggers the LLM resolver, the cascade dispatch lands the generated idea via response_into."
       attribute :idea, String
       attribute :source, String
       emits "MusingMinted"
