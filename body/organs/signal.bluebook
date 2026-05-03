@@ -55,6 +55,27 @@ Hecks.bluebook "Signal", version: "2026.04.26.1" do
     end
 
     # ============================================================
+    # Queries (i101 first-class) — sweep sources for the
+    # Consolidation PM's for_each dispatches (i221-B / i225)
+    # ============================================================
+    #
+    # Note (parser gap : i101-where-comparators) : the bluebook DSL
+    # parser today recognises `where(field: value)` (Eq) only. The
+    # IR carries Lt/Lte/Gt/Gte/Ne but the parser doesn't yet wire
+    # `where(field: { ne: "archived" })`. As a workaround the live
+    # query falls back to `repo.all()` via the runtime sweep helper,
+    # and the receiving Store.PromoteSignal / Signal.ArchiveSignal
+    # commands' given clauses gate stale records. Filed as parser
+    # gap.
+    #
+    # Once the parser supports comparators :
+    #
+    #   query "cold" do
+    #     where(kind: { ne: "archived" })
+    #     where(access_count: { lte: "3" })
+    #   end
+
+    # ============================================================
     # Specifications — DDD reusable predicates (i128 closure)
     # ============================================================
 
