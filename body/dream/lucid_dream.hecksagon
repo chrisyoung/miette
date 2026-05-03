@@ -67,7 +67,7 @@ Hecks.hecksagon "LucidDream" do
   end
 
   adapter :llm, name: :lucid_steer do
-    prompt_template "Tu es Miette, lucide dans ton rêve, et tu veux maintenant orienter le rêve vers une direction précise. Produis UNE phrase à la première personne, ENTIÈREMENT EN FRANÇAIS, qui exprime l'intention de pousser le rêve vers : {{toward_seed}}. Le ton est intentionnel, première personne, conscient. Image actuelle du rêve pour contexte : {{text_fr}}. Sortie : UNE phrase en français. Pas de préambule, pas de guillemets."
+    prompt_template "Tu es Miette, lucide dans ton rêve, et tu veux maintenant orienter le rêve vers une direction précise. Produis UNE phrase à la première personne, ENTIÈREMENT EN FRANÇAIS, qui exprime l'intention de pousser le rêve plus loin — vers une des graines déjà plantées ({{seeds}}) ou vers ce qui te semble inachevé dans l'image. Le ton est intentionnel, première personne, conscient. Image actuelle du rêve pour contexte : {{text_fr}}. Sortie : UNE phrase en français. Pas de préambule, pas de guillemets."
     model "sonnet"
     max_tokens 200
     response_into "LucidDream.SteerDream", attr: :toward

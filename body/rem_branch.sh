@@ -624,21 +624,19 @@ dispatch Consciousness.DreamPulse \
 
 # ── lucid_dream narration — rich first-person when aware ───────────────
 #
-# Regular REM got the image + translation above. Lucid REM adds a
-# second Claude call : a first-person aware-of-dreaming observation
-# that comments on the image AND names an intention ("I'd like to go
-# here with it, let's see"). Generated in French, translated,
-# dispatched as the lucid observation.
+# i75 retirement (lucid path) — runtime walks the bluebook for both
+# observation + steering. The :lucid_observe and :lucid_steer adapters
+# in body/dream/lucid_dream.hecksagon fire from Runtime::dispatch's
+# resolve_llm_adapters hook ; the scaffolder's cross-aggregate scope
+# (hecks#581) lets {{text_fr}} reach into Dream's state. Claude
+# generates the first-person aware-of-dreaming observation + the
+# steering target, and the chain dispatches ObserveDream(observation:)
+# + SteerDream(toward:) with the populated kwargs.
+#
+# Was : two more claude -p direct calls (lucid_observation_from_claude
+# + translate_to_english) feeding pre-computed strings.
+# Now : two bare dispatches.
 if [ "$lucid" = "yes" ]; then
-  if french_obs=$(lucid_observation_from_claude "$french_image" "$self_domain"); then
-    english_obs="$(translate_to_english "$french_obs")"
-    [ -z "$english_obs" ] && english_obs="$french_obs"
-  else
-    # Fallback : phrase the image in the canonical lucid shape.
-    english_obs="I'm dreaming about $english_image — let's see where this goes."
-  fi
-  dispatch LucidDream.ObserveDream observation="$english_obs" >/dev/null
-  # SteerDream targets the self-aggregate we're inside, first-person.
-  dispatch LucidDream.SteerDream \
-    toward="I'd like to go deeper into $self_domain with this" >/dev/null
+  dispatch LucidDream.ObserveDream >/dev/null
+  dispatch LucidDream.SteerDream   >/dev/null
 fi
