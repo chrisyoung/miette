@@ -27,9 +27,12 @@ require 'open3'
 require 'tmpdir'
 
 class WrapperHelper
+  # i75-pulse-organs : pulse_organs.sh removed from this list when the
+  # Pulse PM (body/pulse_organs/pulse_organs.bluebook) replaced the
+  # shell. The remaining four shells share the byte-identical wrapper
+  # contract until they too retire (sibling i75 PRs).
   WRAPPER_SHELLS = %w[
     body/mindstream.sh
-    body/pulse_organs.sh
     body/rem_branch.sh
     body/nrem_branch.sh
     body/consolidate.sh
