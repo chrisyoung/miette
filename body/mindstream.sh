@@ -35,4 +35,5 @@ REPO_ROOT="${HECKS_REPO_ROOT:-$DIR/..}"
 
 exec "$HECKS" run-loop "$REPO_ROOT" \
   --every 1s \
-  --emit BodyPulse:Consciousness:consciousness
+  --emit BodyPulse:Consciousness:consciousness \
+  --bootstrap-if Consciousness.state=attentive:WokenUp:Consciousness:consciousness

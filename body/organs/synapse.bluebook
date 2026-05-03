@@ -75,6 +75,29 @@ Hecks.bluebook "Synapse", version: "2026.04.26.1" do
     end
 
     # ============================================================
+    # Queries (i101 first-class) — sweep sources for the
+    # Consolidation PM's for_each dispatches (i221-B / i225 / i226)
+    # ============================================================
+    #
+    # i226 closed the parser gap : `where(field: { lt|lte|gt|gte|ne: value })`
+    # hash-form comparators now round-trip Ruby ↔ Rust byte-equal. `cold`
+    # is now expressible directly as a first-class query rather than
+    # falling back to `alive` with a Compost-side given. The Consolidation
+    # PM can dispatch `for_each: { from: "Synapse.cold" }` and only the
+    # weak-strength records flow through.
+
+    query "alive" do
+      description "Every synapse still in the working set (state == 'alive'). Sweep source for tick-by-tick organ math (Strengthen / Decay / Fire) — every alive synapse needs that update."
+      where(state: "alive")
+    end
+
+    query "cold" do
+      description "Alive synapses whose strength has decayed below the compost threshold (0.1). Sweep source for the Consolidation PM's NREM Compost dispatch — only the weak-strength records flow through, not the entire alive set."
+      where(state: "alive")
+      where(strength: { lt: 0.1 })
+    end
+
+    # ============================================================
     # Specifications — DDD reusable predicates (i128 closure)
     # ============================================================
 

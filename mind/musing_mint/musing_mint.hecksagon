@@ -102,4 +102,54 @@ Hecks.hecksagon "MusingMint" do
     response_into "MusingMint.MintMusing", attr: :idea
     backend :claude
   end
+
+  # ============================================================
+  # i227 — :compute adapter family for prompt-context population
+  # ============================================================
+  #
+  # Retires the shell's `mint_musing.sh` context-assembly pipeline
+  # (heki reads + jq formatting that produces the five context
+  # fields the :mint_idea adapter's prompt template references).
+  # Each :compute adapter resolves a built-in function from the
+  # runtime's compute_functions registry, runs it against the
+  # upstream state + heki data dir, and chains the returned string
+  # into a target command's attribute via response_into.
+  #
+  # The :compute family lands as part of i220 sub-gap 5
+  # (compute-adapter-primitive). This file ships the FIRST
+  # consumer (recent_musings_summary) ; the four other context
+  # fields (recent_commits, conversations_summary, nursery_sample,
+  # state_snapshot) follow as their respective compute_functions
+  # entries land in the registry.
+  #
+  # Wiring shape :
+  #
+  #   trigger_on "MusingMint.RequestMint"
+  #     The runtime fires the adapter when a RequestMint dispatch
+  #     lands. RequestMint is a stub command (no mutations) whose
+  #     sole role is to be the trigger target — the LLM dispatch
+  #     itself stays MintMusing(idea: <response>) so total_minted
+  #     only advances when a real idea is generated. RequestMint
+  #     is a follow-on : the bluebook command + Mind PM dispatch
+  #     wiring lands once the i227 PM-side gap closes (filed
+  #     separately ; this PR ships the primitive + adapter
+  #     declaration).
+  #
+  #   response_into "MusingMint.MintMusing", attr: :recent_musings_summary
+  #     The function's returned string lands as the
+  #     recent_musings_summary attribute on a MintMusing dispatch
+  #     so the LLM hook (resolve_llm_adapters runs after
+  #     resolve_compute_adapters in the kernel pipeline) sees the
+  #     populated field when it builds the prompt.
+  #
+  # Function : `summarize_recent_musings` reads `musing.heki`
+  # under the runtime's data_dir and formats the top 5 records'
+  # `idea` field into a comma-separated string. Empty when the
+  # file is absent or contains no records.
+
+  adapter :compute, name: :recent_musings_summary do
+    function "summarize_recent_musings"
+    trigger_on "MusingMint.RequestMint"
+    response_into "MusingMint.MintMusing", attr: :recent_musings_summary
+  end
 end

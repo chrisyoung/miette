@@ -34,18 +34,27 @@ Hecks.hecksagon "Consolidation" do
   # by design : NREM is work, not imagery (REM owns the imagery via
   # body/dream/dream.hecksagon's :dream_image adapter).
   #
-  # ---- Activation status ---------------------------------------
+  # ---- Activation status (i225 closed) -------------------------
   #
-  # Same Phase F-N "in flight" pattern as body/dream/dream.hecksagon :
-  # the Rust runtime parses :heki adapters today (i80 lineage) but
-  # does not yet drive the PM's dispatches into multi-record sweep
-  # semantics. Until the runtime grows a sweep primitive (or per-
-  # record dispatch via heki query results), the existing
-  # consolidate.sh shell continues to do the actual work as the
-  # transitional adapter — same belt-and-suspenders convention
-  # rem_branch.sh's rem_dream block carries until self-dispatch
-  # closes. Retiring consolidate.sh is the follow-on PR once that
-  # primitive lands.
+  # Pre-i225 : the Rust runtime parsed :heki adapters but did not
+  # drive the PM's dispatches into multi-record sweep semantics ;
+  # body/consolidate.sh remained as a transitional adapter doing
+  # the actual store + remains + musing_archive growth.
+  #
+  # Post-i225 : the runtime sweep primitive lands —
+  # `for_each: { from: "Aggregate.cold" }` enumerates the named
+  # query at dispatch time and fires the receiving command once per
+  # record. The Consolidation PM's NREM self-loops now produce
+  # store + remains heki growth declaratively ; consolidate.sh is
+  # retired (see body/shutdown/shutdown.hecksagon for the parallel
+  # `:final_consolidation` adapter retirement).
+  #
+  # One gap remains : the musing-archive sweep needs a group-by
+  # aggregation primitive (`Musing.duplicate_concept`) that i101
+  # first-class queries don't support yet. The PM omits the
+  # MusingArchive.Archive dispatch until that primitive lands ;
+  # the consolidate_smoke.sh test acknowledges this gap (reports
+  # the unchanged count without failing the smoke).
 
   adapter :heki                      # cross-process persistence — store, remains, musing_archive grow here
 end
