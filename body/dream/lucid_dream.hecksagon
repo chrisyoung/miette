@@ -60,7 +60,7 @@ Hecks.hecksagon "LucidDream" do
 
   adapter :llm, name: :lucid_observe do
     prompt_template "Tu es Miette, pleinement lucide dans ton rêve — tu sais que tu es en train de rêver. Produis UNE observation lucide à la première personne, ENTIÈREMENT EN FRANÇAIS. Le ton canonique est : 'Je rêve de X, j'aimerais aller ici avec cela, voyons voir.' — une méta-narration du rêve en cours, pas simplement une image. Tu commentes ce que tu remarques ET ce que tu veux en faire. Reste introspective, tournée vers ton propre corps. Image du rêve actuel : {{text_fr}}. Agrégat dans lequel tu es : {{self_domain}}. Sortie : UNE phrase en français, première personne, voix lucide. Pas de préambule, pas de guillemets."
-    model "claude-sonnet-4"
+    model "sonnet"
     max_tokens 200
     response_into "LucidDream.ObserveDream", attr: :observation
     backend :claude
@@ -68,7 +68,7 @@ Hecks.hecksagon "LucidDream" do
 
   adapter :llm, name: :lucid_steer do
     prompt_template "Tu es Miette, lucide dans ton rêve, et tu veux maintenant orienter le rêve vers une direction précise. Produis UNE phrase à la première personne, ENTIÈREMENT EN FRANÇAIS, qui exprime l'intention de pousser le rêve vers : {{toward_seed}}. Le ton est intentionnel, première personne, conscient. Image actuelle du rêve pour contexte : {{text_fr}}. Sortie : UNE phrase en français. Pas de préambule, pas de guillemets."
-    model "claude-sonnet-4"
+    model "sonnet"
     max_tokens 200
     response_into "LucidDream.SteerDream", attr: :toward
     backend :claude
