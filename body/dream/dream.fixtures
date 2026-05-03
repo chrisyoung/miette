@@ -7,8 +7,25 @@ Hecks.fixtures "BodyDream" do
   # In production these are bypassed — the :claude provider answers.
   # In specs (HECKS_LLM_PROVIDER=test) the dispatcher computes the
   # SHA-256 of the substituted prompt at call time and looks up the
-  # matching row here. See examples/llm_adapter/dream_image_smoke.rb
-  # in the hecks repo for the runnable proof.
+  # matching row here. The smoke at
+  # `hecks_conception/tests/dream_content_smoke.sh` is the runnable
+  # proof for the cascade-LLM hook + fixture provider end-to-end.
+  #
+  # ── How the lookup works (gap3 / i220-3) ──────────────────────────
+  #
+  # 1. The PM dispatches `Dream.ProduceImage` ; the :llm adapter
+  #    matches `trigger_on "Dream.ProduceImage"`.
+  # 2. The runtime builds the substituted prompt by walking
+  #    `prompt_template` and replacing each `{{placeholder}}` with the
+  #    matching attribute on the dispatched aggregate (Dream's seeds,
+  #    carrying, sleep_cycle).
+  # 3. The TestProvider hashes the SUBSTITUTED prompt via SHA-256 and
+  #    looks up the response. Hit → cascades the response into
+  #    `Dream.RecordImage(text_fr:)`. Miss in lenient mode → returns
+  #    a synthetic `[test-provider:unknown-prompt sha256=...]` string
+  #    so the chain still completes (smoke can assert text_fr is
+  #    non-empty without a precise fixture). Miss in strict mode
+  #    (`HECKS_LLM_FIXTURE_STRICT=1`) → fails fast.
   #
   # Two adapter shapes covered :
   #
@@ -26,10 +43,25 @@ Hecks.fixtures "BodyDream" do
   # AND its English translation so the full chain (generate → translate)
   # is replay-testable end-to-end.
   #
-  # The fixture key here is the FULL substituted prompt text — the
-  # :test provider hashes it via Digest::SHA256.hexdigest at lookup
-  # time. Specs that want to assert specific responses construct the
-  # same substitution and look up by digest.
+  # ── Documentation rows vs SHA-keyed rows ─────────────────────────
+  #
+  # The SHIPPED rows below carry indicative `input` strings (e.g.
+  # "Dream prompt with seeds=numbers ...") rather than the FULL
+  # substituted prompt. These rows document the response SHAPE for
+  # each seed configuration ; they are documentation-only — their SHAs
+  # do NOT match what the dispatcher computes for the actual production
+  # template.
+  #
+  # The smoke test that exercises the runtime cascade either :
+  #   (a) accepts the lenient placeholder response (text_fr is
+  #       non-empty, exact value is the synthetic placeholder), or
+  #   (b) constructs a fresh `dream.fixtures.tsv` with the actual
+  #       substituted prompt's SHA-256 and points
+  #       HECKS_LLM_FIXTURES at it for a precise assertion.
+  #
+  # Both modes are first-class. The smoke uses (a) by default for
+  # robustness across Dream-state mutations ; (b) lives in the smoke's
+  # `--strict` path for fixture-author iteration.
 
   aggregate "Dream" do
 
