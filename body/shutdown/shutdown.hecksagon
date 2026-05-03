@@ -73,14 +73,25 @@ Hecks.hecksagon "Shutdown" do
     pidfile: "{info}/.mindstream.pid",
     action:  :stop
 
-  # ---- Transitional shell adapter --------------------------------
+  # ---- FinalConsolidation : no adapter (i225 retirement) ---------
   #
-  # FinalConsolidation shells out to consolidate.sh while
-  # aggregates/consolidation.bluebook is still in flight (see
-  # parallel-agent work). When the consolidation bluebook lands
-  # this adapter is replaced by direct dispatch into
-  # ConsolidationSweep.StartSweep etc.
-
-  adapter :shell, name: :final_consolidation,
-    command: "{dir}/consolidate.sh"
+  # Pre-i225 : FinalConsolidation routed through a `:shell` adapter
+  # named `:final_consolidation` that exec'd `body/consolidate.sh`
+  # one last time during shutdown. With i225 closed (runtime sweep
+  # primitive `for_each: { from: "Aggregate.cold" }` lands the
+  # Consolidation PM's NREM dispatches directly into store +
+  # remains heki growth), the consolidate.sh shell is retired.
+  #
+  # FinalConsolidation now runs as a pure command — its emitted
+  # `FinalConsolidationDone` advances shutdown's lifecycle, but the
+  # actual sweep work happens continuously while the Consolidation
+  # PM is alive (the run-loop dispatches NREM sweeps each
+  # PhaseElapsed in light / deep / final_light). Shutdown that
+  # interrupts a sleep cycle simply leaves the cycle's last sweep
+  # whatever the runtime finished before WokenUp closed the PM.
+  #
+  # If a future revision wants a one-shot sweep at shutdown
+  # independent of PM cadence, the right shape is a dedicated
+  # SweepNow command on Consolidation that the Body process manager
+  # dispatches at FinalConsolidation time — declarative, no shell.
 end

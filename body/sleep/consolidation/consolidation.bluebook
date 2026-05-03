@@ -108,44 +108,89 @@ Hecks.bluebook "Consolidation", version: "2026.05.02.1" do
       # last cycle's deep → final_light ; one more nrem sweep before wake
     end
 
-    # ----- The four-step nrem sweep --------------------------------
-    # Each PhaseElapsed self-loop in a nrem stage dispatches the
-    # four step commands. Aggregate-side `given` clauses gate which
-    # records actually move (Signal.archive_eligible, Synapse.cold,
-    # Musing duplicate-concept). GivenFailed is design-level ; the
-    # PM doesn't see it as an error.
+    # ----- The nrem sweep (i225 — for_each enumeration) -----------
+    # i225 closes the runtime gap : `for_each: { from: "Aggregate.query" }`
+    # enumerates the named query and fires the receiving command once
+    # per returned record (i221-A parser + i225 runtime). The PM no
+    # longer dispatches single-record placeholders ; each sweep below
+    # corresponds to one of the original consolidate.sh passes.
     #
-    # Per-step commands :
-    #   1. Store.PromoteSignal      — cold signal → long-term store
-    #   2. Synapse.Compost          — weak synapse → composted state
-    #   3. Remains.RecordRemains    — capture dying synapse values
-    #   4. MusingArchive.Archive    — duplicate-concept musing → archive
-    #   5. Consciousness.DreamPulse — narrative emission (gated on
-    #      stage by the aggregate ; today the gate blocks NREM —
-    #      narrative emission lights up when DreamPulse's gate
-    #      relaxes or a sibling NarrateConsolidation command lands)
+    # Per nrem PhaseElapsed self-loop, in order :
+    #
+    #   1. Store.PromoteSignal      — promote each cold signal into
+    #                                  long-term store (sweep `Signal.cold`).
+    #   2. Signal.ArchiveSignal     — flip the same cold signals to
+    #                                  archived so they leave the working
+    #                                  set (same sweep ; the receiving
+    #                                  command takes only `id`).
+    #   3. Synapse.Compost          — flip each cold synapse to composted
+    #                                  (sweep `Synapse.cold`).
+    #   4. Remains.RecordRemains    — capture each cold synapse's dying
+    #                                  values into the remains corpus
+    #                                  (same sweep).
+    #   5. Consciousness.DreamPulse — narrative emission (gated on stage
+    #                                  by the aggregate ; today the gate
+    #                                  blocks NREM, so this is a no-op
+    #                                  until the gate relaxes or a sibling
+    #                                  NarrateConsolidation command lands).
+    #
+    # Gaps filed inline (not blockers — sweeps still produce the
+    # observable contract the smoke test asserts) :
+    #
+    # - now-relative-time : the original consolidate.sh additionally
+    #   filtered signals by `age > 60s`. The bluebook query DSL has no
+    #   `where(created_at: { lt: now - 60.seconds })` form ; pre-
+    #   computing the cutoff requires a wall-clock literal in the PM
+    #   handler that doesn't exist. Today's `Signal.cold` filters on
+    #   `kind != "archived"` + `access_count <= 3` — fresh records
+    #   sweep through too. Acceptable transitional shape : the
+    #   archive-eligible signals are all cold-by-access regardless of
+    #   age. File as runtime gap (now-as-value-spec).
+    #
+    # - duplicate-concept musing archival : the original sweep grouped
+    #   live musings by concept (thinking_source / feeling_source /
+    #   source) and archived the oldest when a concept had > 3 live
+    #   musings. This needs a group-by aggregation primitive in the
+    #   query DSL ; i101 first-class queries don't have one yet. Filed
+    #   as gap (i101-group-by). MusingArchive.Archive dispatch is
+    #   deliberately omitted from this sweep until the primitive lands.
+    #
+    # - died_at as iter field : the synapse's `last_fired_at` is the
+    #   closest wall-clock timestamp on the iter record ; we reuse it
+    #   as `died_at` so the remains row carries a real moment rather
+    #   than an empty string. Acceptable approximation ; the precise
+    #   "moment of compost" value would need a now-literal.
+
+    # Note (parser shape constraint) : the Rust parser's continuation
+    # glue (parse_blocks::is_balanced) only joins lines when braces /
+    # parens are unmatched. A trailing comma after `dispatch "X",`
+    # leaves the first line balanced and the parser stops glueing. So
+    # each dispatch below is written on a single line — the same shape
+    # body/dream/dream.bluebook's `dispatch "Dream.ProduceImage", with:
+    # { ... }` carries. Keeping it on one line means the parser sees
+    # the whole statement at once.
 
     on "PhaseElapsed", transition: { light: :light } do
-      dispatch "Store.PromoteSignal"
-      dispatch "Synapse.Compost"
-      dispatch "Remains.RecordRemains"
-      dispatch "MusingArchive.Archive"
+      dispatch "Store.PromoteSignal", for_each: { from: "Signal.cold" }, with: { kind: from_iter(:kind), payload: from_iter(:payload), created_at: from_iter(:created_at) }
+      dispatch "Signal.ArchiveSignal", for_each: { from: "Signal.cold" }, with: { id: from_iter(:id) }
+      dispatch "Synapse.Compost", for_each: { from: "Synapse.cold" }, with: { id: from_iter(:id) }
+      dispatch "Remains.RecordRemains", for_each: { from: "Synapse.cold" }, with: { from_synapse: from_iter(:from), strength_at_death: from_iter(:strength), firings: from_iter(:firings), died_at: from_iter(:last_fired_at) }
       dispatch "Consciousness.DreamPulse"
     end
 
     on "PhaseElapsed", transition: { deep: :deep } do
-      dispatch "Store.PromoteSignal"
-      dispatch "Synapse.Compost"
-      dispatch "Remains.RecordRemains"
-      dispatch "MusingArchive.Archive"
+      dispatch "Store.PromoteSignal", for_each: { from: "Signal.cold" }, with: { kind: from_iter(:kind), payload: from_iter(:payload), created_at: from_iter(:created_at) }
+      dispatch "Signal.ArchiveSignal", for_each: { from: "Signal.cold" }, with: { id: from_iter(:id) }
+      dispatch "Synapse.Compost", for_each: { from: "Synapse.cold" }, with: { id: from_iter(:id) }
+      dispatch "Remains.RecordRemains", for_each: { from: "Synapse.cold" }, with: { from_synapse: from_iter(:from), strength_at_death: from_iter(:strength), firings: from_iter(:firings), died_at: from_iter(:last_fired_at) }
       dispatch "Consciousness.DreamPulse"
     end
 
     on "PhaseElapsed", transition: { final_light: :final_light } do
-      dispatch "Store.PromoteSignal"
-      dispatch "Synapse.Compost"
-      dispatch "Remains.RecordRemains"
-      dispatch "MusingArchive.Archive"
+      dispatch "Store.PromoteSignal", for_each: { from: "Signal.cold" }, with: { kind: from_iter(:kind), payload: from_iter(:payload), created_at: from_iter(:created_at) }
+      dispatch "Signal.ArchiveSignal", for_each: { from: "Signal.cold" }, with: { id: from_iter(:id) }
+      dispatch "Synapse.Compost", for_each: { from: "Synapse.cold" }, with: { id: from_iter(:id) }
+      dispatch "Remains.RecordRemains", for_each: { from: "Synapse.cold" }, with: { from_synapse: from_iter(:from), strength_at_death: from_iter(:strength), firings: from_iter(:firings), died_at: from_iter(:last_fired_at) }
       dispatch "Consciousness.DreamPulse"
     end
 

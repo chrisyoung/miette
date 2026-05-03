@@ -76,26 +76,25 @@ Hecks.bluebook "Synapse", version: "2026.04.26.1" do
 
     # ============================================================
     # Queries (i101 first-class) — sweep sources for the
-    # Consolidation PM's for_each dispatches (i221-B / i225)
+    # Consolidation PM's for_each dispatches (i221-B / i225 / i226)
     # ============================================================
     #
-    # Note (parser gap : i101-where-comparators) : the bluebook DSL
-    # parser today recognises `where(field: value)` (Eq) only. The
-    # IR carries Lt/Lte/Gt/Gte ops but the parser doesn't yet wire
-    # `where(field: { lt: 0.1 })` ; until that lands, `cold` reduces
-    # to `alive` and the receiving Compost command's given gates
-    # weak-strength records. Filed as parser gap.
-    #
-    # Once the parser supports comparators :
-    #
-    #   query "cold" do
-    #     where(state: "alive")
-    #     where(strength: { lt: "0.1" })
-    #   end
+    # i226 closed the parser gap : `where(field: { lt|lte|gt|gte|ne: value })`
+    # hash-form comparators now round-trip Ruby ↔ Rust byte-equal. `cold`
+    # is now expressible directly as a first-class query rather than
+    # falling back to `alive` with a Compost-side given. The Consolidation
+    # PM can dispatch `for_each: { from: "Synapse.cold" }` and only the
+    # weak-strength records flow through.
 
     query "alive" do
-      description "Every synapse still in the working set (state == 'alive'). Sweep source for tick-by-tick organ math AND the consolidation compost sweep — receiving Synapse.Compost is a no-op for non-cold synapses (the strength check moves to a given when the parser grows comparators)."
+      description "Every synapse still in the working set (state == 'alive'). Sweep source for tick-by-tick organ math (Strengthen / Decay / Fire) — every alive synapse needs that update."
       where(state: "alive")
+    end
+
+    query "cold" do
+      description "Alive synapses whose strength has decayed below the compost threshold (0.1). Sweep source for the Consolidation PM's NREM Compost dispatch — only the weak-strength records flow through, not the entire alive set."
+      where(state: "alive")
+      where(strength: { lt: 0.1 })
     end
 
     # ============================================================
