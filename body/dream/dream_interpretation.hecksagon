@@ -1,0 +1,59 @@
+Hecks.hecksagon "DreamInterpretation" do
+  # ============================================================
+  # DREAM INTERPRETATION — :compute adapter wiring
+  # ============================================================
+  #
+  # The sibling bluebook (body/dream/dream_interpretation.bluebook)
+  # declares the wake-time chain :
+  #
+  #   WokenUp
+  #     → GatherDreamCorpus              (setup, no state change)
+  #         → InterpretDream             (lands :dream_corpus_json)
+  #             → ExtractTheme           (existing)
+  #                 → ProposeDomainFromDream (existing)
+  #     → Narrate / LockNarrative        (still shell-driven, see gap)
+  #
+  # i220 sub-gap 6 (dream-corpus-tokenize) retires the jq pipeline
+  # in `miette/body/interpret_dream.sh` into the kernel-side
+  # `tokenize_dream_corpus` :compute function (registered in
+  # rust/src/runtime/compute_functions/mod.rs). The :compute
+  # adapter below fires on GatherDreamCorpus, resolves the
+  # function, and chains the resulting JSON payload into
+  # InterpretDream(:dream_corpus_json).
+  #
+  # Function payload shape :
+  #
+  #   { "themes":            [w1, w2, …],   // top 5
+  #     "joined":            "w1, w2, …",
+  #     "first_theme":       "w1",
+  #     "themes_above_threshold": [w1, …] } // count >= 3
+  #
+  # The full per-theme ExtractTheme fan-out + the count-gated
+  # MintMusing dispatch are NOT wired today. Both need DSL
+  # primitives that don't exist yet :
+  #
+  #   - JSON-destructure then_set form, so a single landed JSON
+  #     payload can populate multiple aggregate attributes
+  #     without a Rust-side parser pass per consumer.
+  #   - Policy count-gate (e.g. `given { count(themes_above_
+  #     threshold) >= 3 }`) so the recurring-theme MintMusing
+  #     dispatch fires only when the threshold is crossed.
+  #
+  # Both filed as inbox follow-ons. Until they land, the body
+  # shell stays as the orchestrator for the per-theme cascade ;
+  # interpret_dream.sh shrinks to that fan-out (and the Narrate
+  # / LockNarrative LLM chain). The compute adapter below is
+  # the first wire of the retirement.
+  #
+  # The :llm Narrate / LockNarrative legs land in a follow-on PR
+  # once the chain pattern from dream.hecksagon's :dream_image
+  # adapter is replicated for narrative generation.
+
+  adapter :memory                      # singleton aggregate persistence
+
+  adapter :compute, name: :tokenize_dream_corpus do
+    function "tokenize_dream_corpus"
+    trigger_on "DreamInterpretation.GatherDreamCorpus"
+    response_into "DreamInterpretation.InterpretDream", attr: :dream_corpus_json
+  end
+end
