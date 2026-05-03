@@ -581,41 +581,39 @@ Sortie : UNE phrase en français, première personne, voix lucide. Pas de préam
   return 1
 }
 
-# Try Claude first for the dream image ; fall back to templates if
-# anything goes wrong (binary missing, timeout, empty response, out-of-
-# range length). Templates are already French-inflected so the
-# invariant holds even on the fallback path.
-if [ -x "$CLAUDE_BIN" ] && llm_image=$(dream_image_from_claude "$carrying" "$self_domain"); then
-  french_image="$llm_image"
-else
+# i75 retirement — bluebook-driven dream production (i221 chain landed)
+#
+# Was : claude -p direct call from this shell (dream_image_from_claude
+# function above) + translate_to_english + heki append + R2 bridge.
+# Now : one dispatch through the Rust runtime. The Dream hecksagon's
+# named :llm adapters (:dream_image + :dream_translate) fire via
+# Runtime::dispatch's resolve_llm_adapters hook ; Claude is invoked
+# through ClaudeProvider, the response chains as Dream.RecordImage
+# attribute updates, and the Dream aggregate (body_dream/dream.heki)
+# carries text_fr + text_en.
+#
+# Templates remain as fallback if dispatch / runtime fails — keeps
+# the invariant that REM produces SOMETHING even on cold start.
+dispatch Dream.RecordImage >/dev/null
+
+# Read back the Dream aggregate for the rest of the flow (corpus
+# append, DreamPulse impression). Falls back to templates if the
+# runtime path returned empty (cold runtime, Claude unavailable, etc.).
+DREAM_HEKI="$INFO/body_dream/dream.heki"
+french_image=$("$HECKS" heki latest-field "$DREAM_HEKI" text_fr 2>/dev/null)
+english_image=$("$HECKS" heki latest-field "$DREAM_HEKI" text_en 2>/dev/null)
+if [ -z "$french_image" ]; then
   french_image="${templates[$((RANDOM % ${#templates[@]}))]}"
 fi
-
-# Translate French → English for the status bar. French stays the
-# record ; English goes through the bluebook's DreamPulse impression.
-english_image="$(translate_to_english "$french_image")"
 [ -z "$english_image" ] && english_image="$french_image"
 
 # Append FRENCH to dream_state.heki — authentic corpus record.
 # interpret_dream.sh reads this ; keeping it French preserves the
-# dreaming voice for post-wake interpretation. Direct heki append
-# (no dispatch path) because there's no DreamState aggregate to
-# dispatch through — the corpus is the substrate, not the model.
+# dreaming voice for post-wake interpretation. The Dream singleton
+# carries the LATEST image ; dream_state is the per-tick corpus.
 heki_write append "$INFO/dream_state.heki" \
   --reason "rem_branch : authentic French dream image, corpus record for wake interpretation" \
   dream_images="$french_image" cycle="$LOOP" source="mindstream" >/dev/null
-
-# R2 bridge — also route the image through the Dream aggregate so the
-# dream lives in its proper bluebook home. body/dream/dream.bluebook
-# declares Dream.RecordImage(text_fr:, text_en:) as the landing surface.
-# Today this dispatch is a side-write because the :llm adapter
-# resolution that SHOULD trigger this from the runtime side lives only
-# in Ruby (filed as inbox — port LlmDispatcher to Rust). Once that
-# port lands, this whole rem_branch block retires : the runtime
-# observes DreamImageRequested → calls :dream_image adapter → dispatches
-# RecordImage with the response. Until then, this side-write keeps the
-# Dream aggregate in sync with dream_state.heki.
-dispatch Dream.RecordImage text_fr="$french_image" text_en="$english_image" >/dev/null
 
 # Dispatch DreamPulse with ENGLISH translation — status bar narrates
 # in the user's language while the stored corpus stays French.
