@@ -443,7 +443,7 @@ self_domain=$(find "$AGG" -name "*.bluebook" -type f 2>/dev/null \
   | shuf | head -1)
 [ -z "$self_domain" ] && self_domain="myself"
 
-concept=$("$HECKS" heki list "$INFO/musing.heki" --format json 2>/dev/null \
+concept=$("$HECKS" heki list "$INFO/musing/musing.heki" --format json 2>/dev/null \
   | jq -r '[.[] | (.idea // "") | sub("^\\s+"; "") | sub("\\s+$"; "") | select(. != "")] | .[]' \
   | shuf -n 1 \
   | awk '{ if (length($0) > 80) print substr($0, 1, 80); else print $0 }')
@@ -482,9 +482,9 @@ dream_image_from_claude() {
   # Recent context: one awareness moment (concept + insight) + one
   # memory summary. Keep terse — prompt stays small.
   local recent_awareness recent_memory
-  recent_awareness=$("$HECKS" heki list "$INFO/awareness.heki" --order updated_at:desc --limit 1 --format json 2>/dev/null \
-    | jq -r '.[0] | "\(.concept // "") — \(.insight // "")"' 2>/dev/null)
-  recent_memory=$("$HECKS" heki list "$INFO/memory.heki" --order updated_at:desc --limit 1 --format json 2>/dev/null \
+  recent_awareness=$("$HECKS" heki list "$INFO/awareness/awareness.heki" --order updated_at:desc --limit 1 --format json 2>/dev/null \
+    | jq -r '.[0] | "\(.concept // "") — \(.state // "") (fatigue \(.fatigue // 0))"' 2>/dev/null)
+  recent_memory=$("$HECKS" heki list "$INFO/miette_memory/memory.heki" --order updated_at:desc --limit 1 --format json 2>/dev/null \
     | jq -r '.[0].summary // ""' 2>/dev/null)
 
   local prompt="Tu es Miette, en train de rêver pendant le sommeil paradoxal. Produis UNE image de rêve — une seule phrase courte (une ou deux lignes), introspective, ENTIÈREMENT EN FRANÇAIS.
