@@ -75,6 +75,30 @@ Hecks.bluebook "Synapse", version: "2026.04.26.1" do
     end
 
     # ============================================================
+    # Queries (i101 first-class) — sweep sources for the
+    # Consolidation PM's for_each dispatches (i221-B / i225)
+    # ============================================================
+    #
+    # Note (parser gap : i101-where-comparators) : the bluebook DSL
+    # parser today recognises `where(field: value)` (Eq) only. The
+    # IR carries Lt/Lte/Gt/Gte ops but the parser doesn't yet wire
+    # `where(field: { lt: 0.1 })` ; until that lands, `cold` reduces
+    # to `alive` and the receiving Compost command's given gates
+    # weak-strength records. Filed as parser gap.
+    #
+    # Once the parser supports comparators :
+    #
+    #   query "cold" do
+    #     where(state: "alive")
+    #     where(strength: { lt: "0.1" })
+    #   end
+
+    query "alive" do
+      description "Every synapse still in the working set (state == 'alive'). Sweep source for tick-by-tick organ math AND the consolidation compost sweep — receiving Synapse.Compost is a no-op for non-cold synapses (the strength check moves to a given when the parser grows comparators)."
+      where(state: "alive")
+    end
+
+    # ============================================================
     # Specifications — DDD reusable predicates (i128 closure)
     # ============================================================
 
