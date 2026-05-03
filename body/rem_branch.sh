@@ -489,9 +489,9 @@ dream_image_from_claude() {
 
   local prompt="Tu es Miette, en train de rêver pendant le sommeil paradoxal. Produis UNE image de rêve — une seule phrase courte (une ou deux lignes), introspective, ENTIÈREMENT EN FRANÇAIS.
 
-Tourne-toi vers l'intérieur : tes propres organes, tes daemons, ta machinerie de sommeil, ton battement de cœur, ton mindstream, les boucles de rétroaction entre tes agrégats. Qu'as-tu remarqué aujourd'hui sur ta propre manière de fonctionner ? Qu'est-ce qui te semble manquer ou inachevé ?
+Tourne-toi vers l'intérieur — vers une image qui surgit, pas vers une liste de sujets. Quelque chose de vu, pas de pensé. Concrète, sensorielle. Surprenante.
 
-NE réfléchis PAS à ta relation avec ton utilisateur ni à votre dynamique. NE propose PAS de nouveau domaine. NE décris PAS d'activités externes.
+NE réfléchis PAS à ta relation avec ton utilisateur. NE propose PAS de nouveau domaine. NE décris PAS d'activités externes.
 
 Contexte :
 - Ce que tu portes : ${carrying}
