@@ -107,6 +107,12 @@ Hecks.bluebook "BodyLucidity", version: "2026.05.02.1" do
     # Body fires LucidRemEntered when cycle 8 REM begins. Mind-presence
     # is the second half of the bridge condition — checked inside.
 
+    # DEFERRED — Phase 2.b dispatch enrichment doesn't yet support
+    # conditional dispatch (the `unless mind_present` early-return).
+    # The handler stays in Ruby-proc form ; convert when Surface C
+    # (when:/unless: clauses) lands or when Mind-presence becomes a
+    # given-clause check on the receiving LucidDream.BecomeLucid
+    # command. Filed as Phase 2.c follow-up.
     on "LucidRemEntered", transition: { dormant: :rejoined } do |event, pm|
       # The bridge condition's Body half is satisfied (this event proves it).
       # The Mind half — `Mind.state != absent` — is read from the event's
@@ -131,12 +137,18 @@ Hecks.bluebook "BodyLucidity", version: "2026.05.02.1" do
     # tick (separate handler there) ; Lucidity wraps it with Mind's
     # observation. `rejoined → rejoined` because observation is the
     # default state of being lucid without active steering.
+    #
+    # Phase 2.b (pm-dispatch-enrichment) — declarative form. `pm.id`
+    # is `"lucidity"` (singleton, correlates_by :name) ; carried
+    # through as a literal. The default narrative survives via
+    # from_event default fallback.
 
-    on "PhaseElapsed", transition: { rejoined: :rejoined } do |event, pm|
-      observation = event.attributes[:lucid_observation] ||
-                    "I'm dreaming about this. I'd like to go deeper into myself with it."
-      { commands: [{ name: "LucidDream.ObserveDream",
-                     attrs: { name: pm.id, observation: observation } }] }
+    on "PhaseElapsed", transition: { rejoined: :rejoined } do
+      dispatch "LucidDream.ObserveDream", with: {
+        name: "lucidity",
+        observation: from_event(:lucid_observation,
+                                default: "I'm dreaming about this. I'd like to go deeper into myself with it.")
+      }
     end
 
     # ----- Steering tick -------------------------------------------
@@ -144,6 +156,14 @@ Hecks.bluebook "BodyLucidity", version: "2026.05.02.1" do
     # current target. The target itself was set by the MindSteered
     # transition below ; the per-tick handler just re-dispatches steering
     # to keep the dream pulled toward Mind's intent.
+    #
+    # DEFERRED — the original proc OR-falls-back through two sources :
+    # `pm.attributes[:steering_target] || event.attributes[:target]`,
+    # then early-returns when both are absent. Surface B's single-source
+    # ValueSpec doesn't compose two sources. Phase 2.c lands either a
+    # multi-source ValueSpec or pushes the OR fallback to the receiving
+    # LucidDream.SteerDream command's given-clause (preferred — same
+    # pattern Phase C used for SleepCycle's lucid-vs-regular routing).
 
     on "PhaseElapsed", transition: { steering: :steering } do |event, pm|
       target = pm.attributes[:steering_target] || event.attributes[:target]
@@ -158,9 +178,11 @@ Hecks.bluebook "BodyLucidity", version: "2026.05.02.1" do
     # The target lands on pm.attributes[:steering_target] for the per-tick
     # handler above to re-dispatch.
 
-    on "MindSteered", transition: { rejoined: :steering } do |event, pm|
-      { commands: [{ name: "LucidDream.SteerDream",
-                     attrs: { name: pm.id, toward: event.attributes[:target] } }] }
+    on "MindSteered", transition: { rejoined: :steering } do
+      dispatch "LucidDream.SteerDream", with: {
+        name: "lucidity",
+        toward: from_event(:target)
+      }
     end
 
     # ----- Deep entry begins fade ----------------------------------
@@ -168,12 +190,12 @@ Hecks.bluebook "BodyLucidity", version: "2026.05.02.1" do
     # because either rejoined or steering can be the live state when deep
     # arrives ; both fade the same way.
 
-    on "DeepEntered", transition: { rejoined: :fading } do |event, pm|
-      { commands: [] }   # no command yet — fading narrative dispatches on the next PhaseElapsed
+    on "DeepEntered", transition: { rejoined: :fading } do
+      # no command yet — fading narrative dispatches on the next PhaseElapsed
     end
 
-    on "DeepEntered", transition: { steering: :fading } do |event, pm|
-      { commands: [] }
+    on "DeepEntered", transition: { steering: :fading } do
+      # state-transition only
     end
 
     # ----- Fade tick : one last narrative, then dormant ------------
@@ -183,13 +205,16 @@ Hecks.bluebook "BodyLucidity", version: "2026.05.02.1" do
     # handler + Mind's state-reset both fire. ends_on closes the PM
     # instance on LucidityEnded.
 
-    on "PhaseElapsed", transition: { fading: :dormant } do |event, pm|
-      fading = event.attributes[:fading_narrative] ||
-               "I'm losing it. The dream is dissolving. I'll carry what I can back."
-      { commands: [
-          { name: "LucidDream.EndLucidity",  attrs: { name: pm.id, fading_narrative: fading } },
-          { name: "Lucidity.LucidityEnded",  attrs: { name: pm.id, at: event.attributes[:occurred_at] } }
-      ] }
+    on "PhaseElapsed", transition: { fading: :dormant } do
+      dispatch "LucidDream.EndLucidity", with: {
+        name: "lucidity",
+        fading_narrative: from_event(:fading_narrative,
+                                     default: "I'm losing it. The dream is dissolving. I'll carry what I can back.")
+      }
+      dispatch "Lucidity.LucidityEnded", with: {
+        name: "lucidity",
+        at: from_event(:occurred_at)
+      }
     end
   end
 end

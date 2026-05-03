@@ -140,11 +140,10 @@ Hecks.bluebook "Mind", version: "2026.05.02.1" do
     # gap-4 wake-hook detection). These commands are idempotent — if
     # SleepCycle's studying_dream tail already ran them, they no-op.
 
-    on "WokenUp", transition: { absent: :engaged_in_wake } do |event, pm|
-      { commands: [
-          { name: "DreamInterpretation.Compose", attrs: { sleep_cycle: event.attributes[:sleep_cycle] } },
-          { name: "WakeReport.Compose",          attrs: { sleep_cycle: event.attributes[:sleep_cycle] } }
-      ] }
+    # Phase 2.b (pm-dispatch-enrichment) — declarative form.
+    on "WokenUp", transition: { absent: :engaged_in_wake } do
+      dispatch "DreamInterpretation.Compose", with: { sleep_cycle: from_event(:sleep_cycle) }
+      dispatch "WakeReport.Compose",          with: { sleep_cycle: from_event(:sleep_cycle) }
     end
 
     # ----- Per-tick organ math (the awake branch) ----------------
@@ -165,30 +164,58 @@ Hecks.bluebook "Mind", version: "2026.05.02.1" do
     # PM's RecordMoment dispatch carries only `moment` here and an
     # adapter resolves the rest. Filed as runtime gap.
 
-    on "PhaseElapsed", transition: { engaged_in_wake: :engaged_in_wake } do |event, pm|
-      tick     = event.attributes[:tick]
-      carrying = pm.attributes[:carrying] || "—"
-      now      = event.attributes[:occurred_at]
-      cmds = []
-      cmds << { name: "Tick.MindstreamTick",        attrs: { name: "tick" } }
-      cmds << { name: "Awareness.RecordMoment",     attrs: { moment: tick, updated_at: now } }
-      cmds << { name: "Synapse.StrengthenOrBirth",  attrs: { from: carrying, last_fired_at: now } }
-      cmds << { name: "Synapse.DecayAll",           attrs: { name: "synapse" } }
-      cmds << { name: "Signal.FireSomatic",         attrs: { payload: "pulse",   created_at: now } }
-      cmds << { name: "Signal.FireConcept",         attrs: { payload: carrying,  created_at: now } }
-      cmds << { name: "Signal.ArchiveCold",         attrs: { name: "signal", as_of: now } }
-      cmds << { name: "Focus.Reweight",             attrs: { target: carrying, updated_at: now } }
-      cmds << { name: "Arc.Advance",                attrs: { name: "arc" } }
-      # Consolidation sweep every 60 ticks (legacy mindstream.sh).
-      cmds << { name: "Memory.Consolidate", attrs: { name: "memory" } } if (tick % 60).zero?
+    # Phase 2.b (pm-dispatch-enrichment) — declarative form.
+    # `from_pm(:carrying, default: "—")` always falls through to the
+    # default in Phase 2.b (PM attribute writes land in Phase 2.c) ;
+    # that matches the legacy proc's `pm.attributes[:carrying] || "—"`
+    # fallback exactly.
+    #
+    # DEFERRED inside this handler : `Memory.Consolidate` fires only
+    # when `tick % 60 == 0`. Surface B has no conditional dispatch ;
+    # the cleanest path is to push the modulo gate to a given-clause
+    # on Memory.Consolidate (Phase C pattern : fire-and-let-given-pick).
+    # Filed as Phase 2.c follow-up.
+    on "PhaseElapsed", transition: { engaged_in_wake: :engaged_in_wake } do
+      dispatch "Tick.MindstreamTick", with: { name: "tick" }
+      dispatch "Awareness.RecordMoment", with: {
+        moment: from_event(:tick),
+        updated_at: from_event(:occurred_at)
+      }
+      dispatch "Synapse.StrengthenOrBirth", with: {
+        from: from_pm(:carrying, default: "—"),
+        last_fired_at: from_event(:occurred_at)
+      }
+      dispatch "Synapse.DecayAll", with: { name: "synapse" }
+      dispatch "Signal.FireSomatic", with: {
+        payload: "pulse",
+        created_at: from_event(:occurred_at)
+      }
+      dispatch "Signal.FireConcept", with: {
+        payload: from_pm(:carrying, default: "—"),
+        created_at: from_event(:occurred_at)
+      }
+      dispatch "Signal.ArchiveCold", with: {
+        name: "signal",
+        as_of: from_event(:occurred_at)
+      }
+      dispatch "Focus.Reweight", with: {
+        target: from_pm(:carrying, default: "—"),
+        updated_at: from_event(:occurred_at)
+      }
+      dispatch "Arc.Advance", with: { name: "arc" }
+      # Consolidation sweep every 60 ticks — DEFERRED (see header).
+      # The receiving Memory.Consolidate command will gain a given-clause
+      # `given { tick.modulo(60) == 0 }` when Phase 2.c lands ; until then
+      # the legacy `if (tick % 60).zero?` fires this dispatch every tick
+      # and Memory's existing internal gate idempotents the heavy work.
+      dispatch "Memory.Consolidate", with: { name: "memory", tick: from_event(:tick) }
       # Daydream during idle windows (legacy daydream.sh) — runtime
       # adapter checks heartbeat idle-seconds gate.
-      cmds << { name: "Daydream.Wander",            attrs: { name: "daydream", tick: tick } }
+      dispatch "Daydream.Wander", with: { name: "daydream", tick: from_event(:tick) }
       # Musing pipeline (legacy surface_musing.sh + mint_musing.sh) —
       # surface every tick, mint stochastically (gate inside bluebook).
-      cmds << { name: "MusingMint.SurfaceMusing",   attrs: { tick: tick } }
-      cmds << { name: "MusingMint.MintMusing",      attrs: { tick: tick } }
-      { commands: cmds }
+      dispatch "MusingMint.SurfaceMusing", with: { tick: from_event(:tick) }
+      dispatch "MusingMint.MintMusing", with: { tick: from_event(:tick) }
     end
 
     # ----- Lucidity bridge → enter dream-steering ----------------
@@ -197,10 +224,13 @@ Hecks.bluebook "Mind", version: "2026.05.02.1" do
     # wake-driver to dream-steerer ; per-tick organ math pauses, lucid
     # observe + steer dispatches take over.
 
-    on "MindRejoinedDream", transition: { engaged_in_wake: :engaged_in_lucid_dream } do |event, pm|
-      { commands: [
-          { name: "LucidDream.BecomeLucid", attrs: { name: pm.id, became_lucid_at: event.attributes[:occurred_at] } }
-      ] }
+    # Phase 2.b — declarative. `pm.id` is the static singleton name
+    # "mind" (correlates_by :name) ; passed as a literal.
+    on "MindRejoinedDream", transition: { engaged_in_wake: :engaged_in_lucid_dream } do
+      dispatch "LucidDream.BecomeLucid", with: {
+        name: "mind",
+        became_lucid_at: from_event(:occurred_at)
+      }
     end
 
     # ----- Lucid REM tick — observe + steer ----------------------
@@ -209,6 +239,13 @@ Hecks.bluebook "Mind", version: "2026.05.02.1" do
     # branch). The steering target carries first-person English
     # ("I'd like to go deeper into <self_domain> with this").
 
+    # DEFERRED — the original proc string-interpolates the `target`
+    # value into "I'd like to go deeper into <target> with this".
+    # Surface B has no string-template ValueSpec ; Phase 2.c either
+    # lands a `template:` form OR pushes the interpolation to the
+    # receiving LucidDream.SteerDream command (which receives `toward`
+    # as a structured kwarg + builds the sentence Ruby-side / Rust-side).
+    # Stays Ruby-proc until then.
     on "PhaseElapsed", transition: { engaged_in_lucid_dream: :engaged_in_lucid_dream } do |event, pm|
       target = pm.attributes[:self_domain] || "myself"
       { commands: [
@@ -221,16 +258,20 @@ Hecks.bluebook "Mind", version: "2026.05.02.1" do
     # Lucidity PM emits LucidityEnded when cycle 8 REM closes into deep.
     # Mind goes absent ; the body completes the cycle without driver.
 
-    on "LucidityEnded", transition: { engaged_in_lucid_dream: :absent } do |event, pm|
-      { commands: [{ name: "LucidDream.EndLucidity", attrs: { name: pm.id, ended_at: event.attributes[:occurred_at] } }] }
+    on "LucidityEnded", transition: { engaged_in_lucid_dream: :absent } do
+      dispatch "LucidDream.EndLucidity", with: {
+        name: "mind",
+        ended_at: from_event(:occurred_at)
+      }
     end
 
     # ----- Body fell asleep → mind absent ------------------------
     # SleepEntered makes Mind absent (unless Lucidity rejoins later).
     # ends_on declared above also archives the PM instance on this event.
 
-    on "SleepEntered", transition: { engaged_in_wake: :absent } do |event, pm|
-      { commands: [] }   # no-op — Body's own SleepEntered handlers cascade
+    on "SleepEntered", transition: { engaged_in_wake: :absent } do
+      # no-op — Body's own SleepEntered handlers cascade ; this PM
+      # transition just flips state. ends_on archives the instance.
     end
 
     # ----- Witness subscriptions ---------------------------------
@@ -238,22 +279,24 @@ Hecks.bluebook "Mind", version: "2026.05.02.1" do
     # Witnessing-as-input is the passive observation channel ; Mind reads
     # those observations and re-allocates attention or composes thought-arcs.
 
-    on "WitnessObserved", transition: { engaged_in_wake: :engaged_in_wake } do |event, pm|
+    on "WitnessObserved", transition: { engaged_in_wake: :engaged_in_wake } do
       # A moment of awareness was recorded by Witness. Mind incorporates
       # the observation into its current carrying topic — an attention
       # re-allocation rather than a new dispatch.
-      { commands: [
-          { name: "Focus.NudgeToward", attrs: { target: event.attributes[:concept], updated_at: event.attributes[:occurred_at] } }
-      ] }
+      dispatch "Focus.NudgeToward", with: {
+        target: from_event(:concept),
+        updated_at: from_event(:occurred_at)
+      }
     end
 
-    on "WitnessReflectedOn", transition: { engaged_in_wake: :engaged_in_wake } do |event, pm|
+    on "WitnessReflectedOn", transition: { engaged_in_wake: :engaged_in_wake } do
       # A deeper Witness reflection — Mind composes a thought-arc capturing
       # the reflection. ThoughtArc.Compose stitches awareness moments into
       # a coherent strand.
-      { commands: [
-          { name: "ThoughtArc.Compose", attrs: { seed: event.attributes[:reflection], composed_at: event.attributes[:occurred_at] } }
-      ] }
+      dispatch "ThoughtArc.Compose", with: {
+        seed: from_event(:reflection),
+        composed_at: from_event(:occurred_at)
+      }
     end
   end
 end
