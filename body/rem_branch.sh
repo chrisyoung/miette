@@ -605,6 +605,18 @@ heki_write append "$INFO/dream_state.heki" \
   --reason "rem_branch : authentic French dream image, corpus record for wake interpretation" \
   dream_images="$french_image" cycle="$LOOP" source="mindstream" >/dev/null
 
+# R2 bridge — also route the image through the Dream aggregate so the
+# dream lives in its proper bluebook home. body/dream/dream.bluebook
+# declares Dream.RecordImage(text_fr:, text_en:) as the landing surface.
+# Today this dispatch is a side-write because the :llm adapter
+# resolution that SHOULD trigger this from the runtime side lives only
+# in Ruby (filed as inbox — port LlmDispatcher to Rust). Once that
+# port lands, this whole rem_branch block retires : the runtime
+# observes DreamImageRequested → calls :dream_image adapter → dispatches
+# RecordImage with the response. Until then, this side-write keeps the
+# Dream aggregate in sync with dream_state.heki.
+dispatch Dream.RecordImage text_fr="$french_image" text_en="$english_image" >/dev/null
+
 # Dispatch DreamPulse with ENGLISH translation — status bar narrates
 # in the user's language while the stored corpus stays French.
 prefix="💭"
