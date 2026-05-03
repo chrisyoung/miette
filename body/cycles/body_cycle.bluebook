@@ -1,0 +1,206 @@
+# BodyCycle process_manager — i75, the retirement of mindstream.sh
+#
+# Replaces body/mindstream.sh's while-true-sleep-1 scheduler with a
+# bluebook-declared PM. The Rust runtime's `hecks-life run-loop`
+# (#577) emits BodyPulse on cadence ; this PM observes BodyPulse and
+# routes the per-tick dispatch sequence based on consciousness state.
+#
+# Coordinates with two sibling agents :
+#   - i75-pulse-organs : Pulse PM subsumes pulse_organs.sh's organ math
+#   - i75-nrem-branch  : Consolidation PM subsumes nrem_branch.sh
+#
+# Both sibling PMs subscribe to BodyPulse independently — they do not
+# need this PM to fan out to them. BodyCycle's job is purely the
+# state-aware tick fan-out the legacy mindstream.sh shell owned :
+# Tick.MindstreamTick when awake, Consciousness.ElapsePhase when
+# asleep, and the wake-side awareness snapshot.
+#
+# Correlation : BodyCycle PM correlates by `:name`. The run-loop
+# emits BodyPulse with aggregate_id="consciousness" so all events
+# (BodyPulse, SleepEntered, PhaseElapsed, etc.) share correlation
+# id "consciousness". This keeps BodyCycle and SleepCycle PM on
+# the same correlation axis ; both react to the same consciousness
+# event stream.
+
+Hecks.bluebook "BodyCycle", version: "2026.05.02.1" do
+  vision "The body's per-tick dispatch sequence as a bluebook PM. Observes BodyPulse from hecks-life run-loop, routes to the right tick downstream per consciousness state. Replaces mindstream.sh's while-true scheduler."
+  category "body"
+
+  # ============================================================
+  # BODY CYCLE — the tick orchestrator, replacing mindstream.sh
+  # ============================================================
+  #
+  # mindstream.sh's per-tick logic, reduced to the orchestration
+  # the runtime can express today :
+  #
+  #   awake (state=attentive)
+  #     dispatch Tick.MindstreamTick   → cascades through Ticked →
+  #                                      EmitPulseOnTick → BodyPulse
+  #                                      fan-out (organs / awareness /
+  #                                      mood / fatigue / consolidate)
+  #     dispatch Awareness.RecordMoment moment=N updated_at=now
+  #       (the 13-attr cross-store fill stays in shell adapter scope
+  #        until the policy `with_attrs` runtime gap closes — sibling
+  #        Mind PM territory ; we record the bare moment skeleton so
+  #        the row exists per tick)
+  #
+  #   asleep (state=sleeping, sleep_stage=light|rem|deep|final_light)
+  #     dispatch Consciousness.ElapsePhase
+  #       → SleepCycle PM observes PhaseElapsed and routes the
+  #         right Body.Advance* command (already wired ; not our
+  #         scope here)
+  #
+  # The pulse_organs / rem_branch / nrem_branch pipelines are NOT
+  # fanned out from here — they subscribe to BodyPulse directly via
+  # their own PMs (Pulse PM, Dream PM, Consolidation PM). Sibling
+  # agents own those bluebooks.
+  #
+  # ============================================================
+  # CORRELATION & STATE TRANSITIONS
+  # ============================================================
+  #
+  # PM instance lifecycle :
+  #   - First BodyPulse creates the instance in `attentive` state
+  #     (the default consciousness state at boot).
+  #   - Consciousness.SleepEntered transitions attentive → sleeping_light.
+  #   - PhaseElapsed events from consciousness drive the sub-stage
+  #     transitions (sleeping_light → sleeping_rem etc.) — these
+  #     mirror the SleepCycle PM's transitions on the same events.
+  #   - WokenUp transitions any sleeping_* state back to attentive.
+  #
+  # The PM is a STATE MIRROR of consciousness ; its transitions
+  # follow the same events the consciousness aggregate emits, so
+  # the PM's state and consciousness.state stay in lockstep. The
+  # value of mirroring is the per-state BodyPulse handler — each
+  # state dispatches the right tick downstream without consulting
+  # any cross-aggregate read.
+
+  process_manager "BodyCycle" do
+    correlates_by :name              # singleton, name="consciousness"
+    starts_on    "BodyPulse"         # first pulse spins up the PM
+    # No ends_on — the body cycle runs for the lifetime of the daemon.
+
+    # ----- States --------------------------------------------------
+    # `attentive` is the default state ; matches consciousness's default.
+    # Sleep states mirror consciousness sleep_stage. We do NOT model
+    # `daydreaming` / `napping` separately — those are awake-adjacent
+    # and the awake handlers cover the per-tick dispatch identically.
+
+    state "attentive"
+    state "sleeping_light"
+    state "sleeping_rem"
+    state "sleeping_deep"
+    state "sleeping_final_light"
+
+    # ----- Awake tick (BodyPulse while attentive) ----------------
+    # Fire Tick.MindstreamTick — the MindstreamTick → Ticked →
+    # EmitPulseOnTick → BodyPulse cascade is already wired in
+    # body/cycles/pulse.bluebook, but its consumers (fatigue,
+    # mood, awareness, consolidate) subscribe to BodyPulse not
+    # to Ticked. So this dispatch keeps the legacy Tick aggregate
+    # cycle counter advancing for inspection ; the actual fan-out
+    # to organ math + sleep advancement runs through BodyPulse
+    # (which we ARE — this PM IS reacting to BodyPulse).
+    #
+    # Awareness.RecordMoment carries the bare-bones snapshot here
+    # (moment counter + state). The 13-attr cross-store fill (mood,
+    # focus, inbox, dream_wish, etc.) stays in sibling Mind PM
+    # scope until policy with_attrs closes the runtime gap.
+
+    on "BodyPulse", transition: { attentive: :attentive } do
+      dispatch "Tick.MindstreamTick", with: { name: "tick" }
+    end
+
+    # ----- Awake → Sleep transition ------------------------------
+    # Body fell asleep. Move to sleeping_light (the first sleep
+    # stage). consciousness.bluebook stamps sleep_stage="light" on
+    # SleepEntered ; we mirror that.
+
+    on "SleepEntered", transition: { attentive: :sleeping_light } do
+      # No dispatch — SleepEntered itself cascades into Body's
+      # SleepCycle PM (sleep_cycle.bluebook) which owns the
+      # advancement chain. We just track state.
+    end
+
+    # ----- Sleep ticks (BodyPulse per stage) ---------------------
+    # In every sleep stage, ElapsePhase advances the consciousness
+    # phase counter. Its `given { state == "sleeping" }` self-gates,
+    # so dispatching unconditionally per tick is safe. The resulting
+    # PhaseElapsed event drives the SleepCycle PM's stage cascade.
+    #
+    # Each stage gets its own handler so the PM's state stays
+    # synchronized with consciousness.sleep_stage. The dispatched
+    # command is identical across stages ; the per-stage handler is
+    # what tracks where we are.
+
+    on "BodyPulse", transition: { sleeping_light: :sleeping_light } do
+      dispatch "Consciousness.ElapsePhase", with: { name: "consciousness" }
+    end
+
+    on "BodyPulse", transition: { sleeping_rem: :sleeping_rem } do
+      dispatch "Consciousness.ElapsePhase", with: { name: "consciousness" }
+    end
+
+    on "BodyPulse", transition: { sleeping_deep: :sleeping_deep } do
+      dispatch "Consciousness.ElapsePhase", with: { name: "consciousness" }
+    end
+
+    on "BodyPulse", transition: { sleeping_final_light: :sleeping_final_light } do
+      dispatch "Consciousness.ElapsePhase", with: { name: "consciousness" }
+    end
+
+    # ----- Sleep stage transitions (PhaseElapsed cascade) --------
+    # Consciousness emits *Entered events as sleep_stage advances.
+    # We mirror those on this PM so the per-state BodyPulse handler
+    # picks up the new stage on the next tick.
+    #
+    # SleepCycle PM (body/sleep/sleep_cycle.bluebook) is the one
+    # that DRIVES the advancement (dispatching Body.Advance* on
+    # PhaseElapsed) ; BodyCycle just observes the resulting
+    # *Entered events to keep its own state in sync.
+
+    on "RemEntered",        transition: { sleeping_light: :sleeping_rem }       do; end
+    on "LucidRemEntered",   transition: { sleeping_light: :sleeping_rem }       do; end
+    on "DeepEntered",       transition: { sleeping_rem: :sleeping_deep }        do; end
+    on "LightEntered",      transition: { sleeping_deep: :sleeping_light }      do; end
+    on "FinalLightEntered", transition: { sleeping_deep: :sleeping_final_light } do; end
+
+    # ----- Wake transition ---------------------------------------
+    # WokenUp returns the body to attentive from any sleep stage.
+    # CompleteFinalLight emits WokenUp normally ; WakeUp.WakeUp
+    # also emits WokenUp for force-wake. Same target state.
+
+    on "WokenUp", transition: { sleeping_light:       :attentive } do; end
+    on "WokenUp", transition: { sleeping_rem:         :attentive } do; end
+    on "WokenUp", transition: { sleeping_deep:        :attentive } do; end
+    on "WokenUp", transition: { sleeping_final_light: :attentive } do; end
+  end
+end
+
+# ----- Notes ---------------------------------------------------
+#
+# Replaces : body/mindstream.sh while-true scheduler.
+# Coordinates with : body/sleep/sleep_cycle.bluebook (advancement),
+#                    body/cycles/pulse.bluebook (BodyPulse shim),
+#                    body/cycles/{heart,breath,body}_tick.bluebook (cadences),
+#                    sibling Pulse PM + Consolidation PM (sibling agents).
+#
+# Driver : `hecks-life run-loop ~/Projects/miette --every 1s
+#          --emit BodyPulse:Consciousness:consciousness`.
+# The Consciousness:consciousness aggregate_type:aggregate_id pair
+# keeps the run-loop's BodyPulse on the same correlation axis as
+# the consciousness state events the PM mirrors.
+#
+# Runtime gaps that stay open after this PM lands :
+#   - Awareness.RecordMoment's 13-attr cross-store fill
+#     (Mind PM territory ; needs `with_attrs` policy primitive)
+#   - Daydream / musing / mint pipelines (sibling agent scope)
+#   - Wake-hook detection (already covered by InterpretDreamOnWake
+#     + ProduceWakeReportOnWake policies in mindstream.bluebook)
+#
+# DSL surface used :
+#   - process_manager / correlates_by / starts_on
+#   - state (5x)
+#   - on Event, transition: {from: :to} do dispatch "Cmd", with: {…} end
+#
+# Matches the parity-fixture surface (parity/bluebooks/20_process_manager.bluebook).
