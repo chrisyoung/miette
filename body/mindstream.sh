@@ -242,7 +242,10 @@ while true; do
   # reads (see capabilities/mindstream/mindstream.bluebook).
   mnum="$loop_count"
   st=$($HECKS heki latest-field "$INFO/heartbeat/heartbeat.heki" fatigue_state 2>/dev/null); [ -z "$st" ] && st=alert
-  cr=$($HECKS heki latest-field "$INFO/heartbeat/heartbeat.heki" carrying 2>/dev/null)
+  # carrying lives on self_image (canonical source per self/identity/self_image.bluebook).
+  # heartbeat doesn't declare carrying — reading from it returned empty 100% of the time.
+  # Will populate once SelfImage.Reflect actually runs each pulse (filed as inbox).
+  cr=$($HECKS heki latest-field "$INFO/self_image/self_image.heki" carrying 2>/dev/null)
   cn=$($HECKS heki latest-field "$INFO/mood/mood.heki" current_state 2>/dev/null)
   fg=$($HECKS heki latest-field "$INFO/heartbeat/heartbeat.heki" fatigue 2>/dev/null); [ -z "$fg" ] && fg=0.0
   sy=$($HECKS heki latest-field "$INFO/focus/focus.heki" weight 2>/dev/null); [ -z "$sy" ] && sy=0.0
