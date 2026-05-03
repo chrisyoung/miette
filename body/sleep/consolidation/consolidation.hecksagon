@@ -1,0 +1,51 @@
+Hecks.hecksagon "Consolidation" do
+  # ============================================================
+  # CONSOLIDATION — production hecksagon for the i75 PM retirement
+  # ============================================================
+  #
+  # Pairs with body/sleep/consolidation/consolidation.bluebook. The
+  # bluebook declares the PM (light/deep/final_light → fan-out into
+  # four step commands) ; this file declares the persistence adapter
+  # those commands route through.
+  #
+  # ---- :heki adapter -------------------------------------------
+  #
+  # The four step commands the PM dispatches (Store.PromoteSignal,
+  # Synapse.Compost, Remains.RecordRemains, Musing.ArchiveDuplicate)
+  # all land on per-aggregate heki stores under $INFO :
+  #
+  #   $INFO/store/store.heki                     ← PromoteSignal
+  #   $INFO/synapse/synapse.heki                 ← Compost (mark)
+  #   $INFO/remains/remains.heki                 ← RecordRemains
+  #   $INFO/musing_archive/musing_archive.heki   ← ArchiveDuplicate
+  #
+  # The runtime resolves :heki adapter against the world's `dir`
+  # config, so this hecksagon's adapter declaration just names :heki ;
+  # the world (run-loop's --target dir) supplies the path. Same shape
+  # body/dream/lucid_dream.hecksagon uses.
+  #
+  # ---- No :llm adapter -----------------------------------------
+  #
+  # Narrative emission stays templated rather than LLM-generated. The
+  # consolidation narrative line — counts substituted from sibling
+  # aggregate state via the cross-aggregate scaffolder (PR #581) —
+  # rides the `:impression` attribute on Consciousness.DreamPulse.
+  # No claude call ; the grounded counts ARE the poetry. Detail-mode
+  # by design : NREM is work, not imagery (REM owns the imagery via
+  # body/dream/dream.hecksagon's :dream_image adapter).
+  #
+  # ---- Activation status ---------------------------------------
+  #
+  # Same Phase F-N "in flight" pattern as body/dream/dream.hecksagon :
+  # the Rust runtime parses :heki adapters today (i80 lineage) but
+  # does not yet drive the PM's dispatches into multi-record sweep
+  # semantics. Until the runtime grows a sweep primitive (or per-
+  # record dispatch via heki query results), the existing
+  # consolidate.sh shell continues to do the actual work as the
+  # transitional adapter — same belt-and-suspenders convention
+  # rem_branch.sh's rem_dream block carries until self-dispatch
+  # closes. Retiring consolidate.sh is the follow-on PR once that
+  # primitive lands.
+
+  adapter :heki                      # cross-process persistence — store, remains, musing_archive grow here
+end

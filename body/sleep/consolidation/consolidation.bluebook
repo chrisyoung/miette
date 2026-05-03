@@ -1,0 +1,202 @@
+# Consolidation process_manager + aggregate — i75 retirement of body/nrem_branch.sh
+#
+# Promoted from body/sleep/consolidation.bluebook on 2026-05-02 ; the
+# old aggregate-only file moves into this directory + grows a PM that
+# subsumes the imperative loop nrem_branch.sh used to run every NREM
+# tick (light, deep, final_light). Same retirement family as :
+#
+#   - body/sleep/sleep_cycle.bluebook (SleepCycle PM ; i112 / Phase 4)
+#   - body/dream/dream.bluebook        (Dream PM ; Phase 6)
+#   - body/dream/lucidity.bluebook     (Lucidity PM ; Phase 7)
+#
+# What nrem_branch.sh used to do, per tick during NREM :
+#
+#   1. Promote signals     — Signal.heki rows older than 20s with
+#                            access_count <= 3 → append to store.heki.
+#   2. Compost synapses    — Synapse.heki rows with strength < 0.1 →
+#                            append remains.heki + dispatch
+#                            Synapse.Compost.
+#   3. Archive duplicate   — group musing.heki by concept ; if a
+#      musings              concept has > 1 live musing, archive all
+#                            but the most recent into musing_archive.
+#   4. Narrative emission  — render a one-line consolidation narrative
+#                            (counts substituted from sibling state)
+#                            and dispatch Consciousness.DreamPulse with
+#                            the narrative as :impression so the status
+#                            bar reads what the body is doing.
+#
+# All four steps fired UNGATED beyond the sleeping+nrem-stage check.
+# The PM below makes that gate declarative : it observes PhaseElapsed
+# while in light / deep / final_light stages and dispatches the four
+# step commands. RemEntered / WokenUp transition out of the active
+# stages so REM and post-wake ticks don't re-fire consolidation.
+#
+# ----- Activation status ---------------------------------------
+#
+# Phase 1+3 (Ruby DSL + Rust parser) land the PM ; Phase B (runtime
+# execution of process_managers from Rust) lights the PM up for the
+# production daemons that fork hecks-life per dispatch. Until then,
+# the PM is a no-op in production daemons but works in Ruby specs.
+# Same shape SleepCycle / Dream / Lucidity carry — bluebook IS the
+# source of truth ; runtime execution catches up incrementally.
+#
+# Coordination with sibling i75 PRs :
+#   - i75-pulse-organs      : Pulse PM (per-tick organ math)
+#   - i75-mint-musing       : :mint_idea adapter for musing minting
+#   - i75-mindstream        : BodyCycle PM + run-loop wiring
+#
+# Each PM observes the same PhaseElapsed event ; they don't conflict
+# because each PM correlates by its own aggregate id and dispatches
+# disjoint commands.
+
+Hecks.bluebook "Consolidation", version: "2026.05.02.1" do
+  vision "Sleep-driven memory consolidation as bluebook PM. During NREM (light, deep, final_light) the body promotes cold signals into long-term store, composts dead synapses into remains, archives duplicate-concept musings, and emits a consolidation narrative. Replaces the imperative loop nrem_branch.sh / consolidate.sh ran every NREM tick."
+  category "body"
+
+  # ============================================================
+  # CONSOLIDATION PROCESS MANAGER
+  # ============================================================
+  #
+  # State is the current sleep_stage. PhaseElapsed self-loops fire
+  # the four step commands while in nrem stages. Stage transition
+  # events (LightEntered, RemEntered, DeepEntered, FinalLightEntered)
+  # move the PM ; WokenUp closes it out.
+  #
+  # `dormant` is the pre-SleepEntered initial state — the PM is born
+  # the moment the body falls asleep and dies the moment it wakes.
+  # `done` is the post-wake terminal state ; ends_on archives the
+  # instance so the next night gets a fresh PM.
+
+  process_manager "Consolidation" do
+    correlates_by :body_id           # singleton per body ; Body emits PhaseElapsed
+    starts_on    "SleepEntered"      # born when the body falls asleep
+    ends_on      "WokenUp"           # closes when the body wakes
+
+    # ----- States --------------------------------------------------
+    state "dormant"                  # post-create, awaiting first stage event
+    state "light"                    # NREM light : early consolidation
+    state "rem"                      # REM : Dream PM owns ; we no-op
+    state "deep"                     # NREM deep : the heavy lift
+    state "final_light"              # NREM final-light : winding down
+    state "done"                     # post-wake terminal
+
+    # ----- Stage transitions (mirror Body's sleep_stage field) ----
+    # SleepEntered moves us into light ; subsequent stage entries
+    # follow Body's published events.
+
+    on "SleepEntered", transition: { dormant: :light } do
+      # state-transition only ; first PhaseElapsed in light fires the sweep
+    end
+
+    on "LightEntered", transition: { deep: :light } do
+      # Cycles 2..N : deep → light → rem ; back into nrem light
+    end
+
+    on "RemEntered", transition: { light: :rem } do
+      # leave nrem ; Dream PM owns REM ticks
+    end
+
+    on "LucidRemEntered", transition: { light: :rem } do
+      # final-cycle lucid REM ; same hand-off to Dream PM
+    end
+
+    on "DeepEntered", transition: { rem: :deep } do
+      # REM ends ; resume nrem consolidation in deep stage
+    end
+
+    on "FinalLightEntered", transition: { deep: :final_light } do
+      # last cycle's deep → final_light ; one more nrem sweep before wake
+    end
+
+    # ----- The four-step nrem sweep --------------------------------
+    # Each PhaseElapsed self-loop in a nrem stage dispatches the
+    # four step commands. Aggregate-side `given` clauses gate which
+    # records actually move (Signal.archive_eligible, Synapse.cold,
+    # Musing duplicate-concept). GivenFailed is design-level ; the
+    # PM doesn't see it as an error.
+    #
+    # Per-step commands :
+    #   1. Store.PromoteSignal      — cold signal → long-term store
+    #   2. Synapse.Compost          — weak synapse → composted state
+    #   3. Remains.RecordRemains    — capture dying synapse values
+    #   4. MusingArchive.Archive    — duplicate-concept musing → archive
+    #   5. Consciousness.DreamPulse — narrative emission (gated on
+    #      stage by the aggregate ; today the gate blocks NREM —
+    #      narrative emission lights up when DreamPulse's gate
+    #      relaxes or a sibling NarrateConsolidation command lands)
+
+    on "PhaseElapsed", transition: { light: :light } do
+      dispatch "Store.PromoteSignal"
+      dispatch "Synapse.Compost"
+      dispatch "Remains.RecordRemains"
+      dispatch "MusingArchive.Archive"
+      dispatch "Consciousness.DreamPulse"
+    end
+
+    on "PhaseElapsed", transition: { deep: :deep } do
+      dispatch "Store.PromoteSignal"
+      dispatch "Synapse.Compost"
+      dispatch "Remains.RecordRemains"
+      dispatch "MusingArchive.Archive"
+      dispatch "Consciousness.DreamPulse"
+    end
+
+    on "PhaseElapsed", transition: { final_light: :final_light } do
+      dispatch "Store.PromoteSignal"
+      dispatch "Synapse.Compost"
+      dispatch "Remains.RecordRemains"
+      dispatch "MusingArchive.Archive"
+      dispatch "Consciousness.DreamPulse"
+    end
+
+    # ----- REM no-op self-loop -------------------------------------
+    # Dream PM owns REM ticks. We track state but dispatch nothing
+    # so the four-step sweep stays nrem-only.
+    on "PhaseElapsed", transition: { rem: :rem } do
+      # state-only ; Dream PM owns this tick
+    end
+
+    # ----- Wake : ends_on closes the PM ----------------------------
+    on "WokenUp", transition: { final_light: :done } do
+      # ends_on archives the instance ; next night creates a fresh one
+    end
+  end
+
+  # ============================================================
+  # CONSOLIDATION AGGREGATE — preserved from the pre-PM file
+  # ============================================================
+  #
+  # Aggregate identity + ConsolidateSignals command preserved from the
+  # pre-i75 consolidation.bluebook. The PM dispatches Store /
+  # Synapse / Musing commands directly ; ConsolidateSignals stays as
+  # the aggregate-level coarse summary command + the CompostOnForget
+  # policy's trigger. MemoryForgotten still routes here when a memory
+  # is intentionally released.
+
+  aggregate "Consolidation", "Compressing many signals into long-term memory — happens during NREM. The body's nightly archival pass." do
+    identified_by :name
+    attribute :name, String
+    attribute :signals_consolidated, Integer
+    attribute :memories_created, Integer
+    attribute :consolidated_at, String
+
+    command "ConsolidateSignals" do
+      role "Daemon"
+      description "Compress old signals into long-term memories during deep sleep — coarse summary command kept for the CompostOnForget policy's residue path."
+      attribute :signals_consolidated, Integer
+      attribute :memories_created, Integer
+      emits "SignalsConsolidated"
+      then_set :signals_consolidated, to: :signals_consolidated
+      then_set :memories_created, to: :memories_created
+    end
+  end
+
+  # When a memory is intentionally forgotten, the dream side composts
+  # the residue. MemoryForgotten is emitted by the Forgetting aggregate
+  # (mind/forgetting.bluebook).
+  policy "CompostOnForget" do
+    on "MemoryForgotten"
+    trigger "ConsolidateSignals"
+    across "Dream"
+  end
+end

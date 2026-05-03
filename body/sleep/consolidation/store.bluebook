@@ -1,0 +1,50 @@
+Hecks.bluebook "Store", version: "2026.05.02.1" do
+  vision "Long-term memory store — promoted signals land here at NREM consolidation. The body's persistent record of what mattered enough to be carried forward."
+  category "body"
+
+  # ============================================================
+  # STORE — long-term memory promoted from cold signals
+  # ============================================================
+  #
+  # Lifted out of consolidate.sh in i75 retirement. nrem_branch.sh +
+  # consolidate.sh used to write directly to $INFO/store/store.heki ;
+  # the Consolidation PM (sibling consolidation.bluebook) now
+  # dispatches Store.PromoteSignal per cold-signal candidate, and
+  # the runtime's :heki adapter (declared in consolidation.hecksagon)
+  # routes each dispatch into a row append.
+  #
+  # ---- Schema preserved from the script's heki append ----------
+  #
+  # The shell appended these fields :
+  #   kind, payload, source, created_at
+  # Plus the auto-populated heki uuid as :id.
+  #
+  # PromoteSignal carries the same shape so the .heki rows are byte-
+  # equivalent to the script's output during the transition. Source
+  # is hard-coded to "signal" because that's the only producer today —
+  # if the runtime grows other promotion paths (e.g. mind-side
+  # surfacing memorable musings), they get their own commands rather
+  # than overloading PromoteSignal.
+
+  aggregate "Store", "A long-term memory record — promoted from a cold signal during NREM consolidation. Multi-record : each promotion appends a fresh row." do
+    identified_by :id
+    attribute :id,         String
+    attribute :kind,       String
+    attribute :payload,    String
+    attribute :source,     String
+    attribute :created_at, String
+
+    command "PromoteSignal" do
+      role "Daemon"
+      description "Promote a cold signal (access_count <= 3, age > 60s) into long-term store. Append-only ; the heki adapter persists the row, leaving the original Signal aggregate to be archived in a subsequent dispatch (Signal.ArchiveSignal)."
+      attribute :kind,       String
+      attribute :payload,    String
+      attribute :created_at, String
+      emits "SignalPromoted"
+      then_set :kind,       to: :kind
+      then_set :payload,    to: :payload
+      then_set :source,     to: "signal"
+      then_set :created_at, to: :created_at
+    end
+  end
+end
