@@ -92,12 +92,39 @@ Hecks.bluebook "BodyDream", version: "2026.05.02.1" do
     # musing, french_lit, carrying.
 
     on "SleepEntered", transition: { dormant: :incubating } do
-      # Diversity rules (recently-used keyword exclusion + forced
-      # novelty) live inside DreamSeed.PlantSeed's content gate today
-      # via the seed_dreams shell ; once :llm + per-source queries
-      # land, the PM expands the loop here. Until then this transition
-      # is a no-op marker — rem_branch.sh's first-REM-tick seed_dreams
-      # block dispatches the actual PlantSeed commands.
+      # i222 — declarative seed planting. Day-built musings sweep into
+      # DreamSeed.PlantSeed dispatches so the night's dream-character
+      # has source material to weave into images. With i221-A's
+      # `for_each: { from: "Aggregate.query" }` syntax + i225's runtime
+      # drain_policies enumeration + i226's hash-form comparators,
+      # this is a one-line declaration : the runtime walks Musing.recent
+      # (live unconceived musings, freshest-first, capped at 10) and
+      # fires DreamSeed.PlantSeed once per record. Each record's `idea`
+      # field becomes the seed's `image` ; last_seeded_at is a literal
+      # marker so DreamSeed records when the seed was planted.
+      #
+      # Filed gaps (acknowledged, not blockers) :
+      #
+      # - Nursery.sample : the original rem_branch.sh seed_dreams block
+      #   drew one seed from a random nursery domain's vision line.
+      #   There is no Nursery aggregate today (nursery is a directory
+      #   of .bluebook files, not a domain shape) ; modelling it would
+      #   need a NurseryIndex aggregate that ingests the directory
+      #   listing as records. File as gap (i222-nursery-aggregate).
+      #
+      # - now-relative-time : `Musing.recent` orders by created_at desc
+      #   + limits to 10. The original 10-source pool additionally
+      #   filtered by 24h-recency for the dream_echo source ; same gap
+      #   as i225's now-relative-time filing. Acceptable today.
+      #
+      # - Sources beyond Musing : the original 10-source pool
+      #   (awareness, inbox, recent_commit, dream_echo, nursery,
+      #   self_aggregate, vow, musing, french_lit, carrying) needs
+      #   first-class queries on Awareness / Vow / etc. before the PM
+      #   can sweep them. Per-source query rollout is the i222-followon
+      #   work ; this PM ships with Musing as the seed-source floor.
+
+      dispatch "DreamSeed.PlantSeed", for_each: { from: "Musing.recent" }, with: { image: from_iter(:idea) }
     end
 
     # ----- First REM tick : seeds activate, generation begins ------

@@ -126,6 +126,32 @@ Hecks.bluebook "Musings", version: "2026.04.16.1" do
       then_set :conceived, to: true
       then_set :conceived_as, to: "dismissed"
     end
+
+    # ============================================================
+    # Queries (i101 first-class) — sweep sources for the Dream PM's
+    # SleepEntered seeding (i222)
+    # ============================================================
+    #
+    # `recent` is the per-night seed source : the Dream PM dispatches
+    # `DreamSeed.PlantSeed` for each musing returned, so day-built
+    # ideas surface as dream-images. order_by + limit work over the
+    # heki row's auto-populated `created_at` (heki append timestamps
+    # every record), so even though `created_at` isn't a declared
+    # attribute on Musing today, the row carries it and the runtime's
+    # generic-query executor honours it. If declared attributes
+    # become a strict requirement, add `attribute :created_at, String`
+    # alongside.
+    #
+    # The where-clause excludes conceived musings — those have already
+    # become real domains and don't need to be re-seeded. order_by
+    # newest-first means the freshest day-thoughts win the slot.
+
+    query "recent" do
+      description "Live unconceived musings, freshest first, capped at 10. Sweep source for the Dream PM's SleepEntered handler — each returned musing becomes a DreamSeed.PlantSeed dispatch so day-built ideas thread into the night's dreams. Ordering is by the heki row's auto-populated created_at field ; conceived musings are excluded because they've already become real domains."
+      where(conceived: false)
+      order_by :created_at, :desc
+      limit 10
+    end
   end
 
   aggregate "Presentation", "How musings are shown when asked" do
