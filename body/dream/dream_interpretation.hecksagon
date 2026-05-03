@@ -1,0 +1,69 @@
+Hecks.hecksagon "DreamInterpretation" do
+  # ============================================================
+  # DREAMINTERPRETATION — adapter wiring for the wake-time reading
+  # ============================================================
+  #
+  # Pairs with body/dream/dream_interpretation.bluebook. The bluebook
+  # declares one aggregate (DreamInterpretation), six commands
+  # (InterpretDream, ExtractTheme, Synthesize, ProposeDomainFromDream,
+  # Narrate, LockNarrative), and the :input/:response convention. This
+  # file declares the LLM adapter that closes the Narrate → LockNarrative
+  # round-trip without shell intervention.
+  #
+  # ---- The adapter ---------------------------------------------
+  #
+  # :narrative_lock  — claude-backed French-inflected paragraph
+  #                    generation. Reads dream_images + strongest_synapse
+  #                    + recurring_theme through {{placeholders}} ;
+  #                    routes the response into LockNarrative(response:).
+  #
+  # The trigger discipline mirrors dream.hecksagon's :dream_image
+  # adapter : when the runtime sees `DreamInterpretation.LockNarrative`
+  # dispatched (the policy LockNarrativeOnNarrativeRequested fires it
+  # with no :response), the adapter resolves :claude (or :test in
+  # specs), substitutes the prompt placeholders from aggregate state,
+  # calls the provider, and dispatches LockNarrative AGAIN with
+  # :response set. The second dispatch's then_set copies :response
+  # into :narrative — the wake-ritual reads :narrative and surfaces
+  # it as the morning paragraph.
+  #
+  # The chain is finite by discipline : the second dispatch carries
+  # the populated :response attr already, so the LLM adapter does
+  # not re-fire on it (its trigger is "LockNarrative dispatched
+  # with no response in state" — once :response is in attrs, the
+  # cascade hint suppresses re-entry, mirroring the Ruby surface).
+  #
+  # ---- Why not Narrate ? ---------------------------------------
+  #
+  # The earlier shape (interpret_dream.sh) dispatched Narrate with a
+  # shell-composed :input prompt, then re-read :response from heki
+  # and dispatched LockNarrative explicitly. That works but couples
+  # the shell to the adapter timing. The new shape moves the prompt
+  # template ENTIRELY into the adapter (the {{placeholders}} read
+  # from state) and lets the runtime's response_into mechanism close
+  # the loop. Narrate is still useful for shells that want to seed
+  # :input directly ; the adapter does not depend on Narrate's
+  # :input being set when it generates from state.
+  #
+  # ---- i220 scope note -----------------------------------------
+  #
+  # This hecksagon closes the Narrate → LockNarrative leg of the
+  # wake chain via the :llm response_into mechanism. The mid-chain
+  # commands (ExtractTheme's per-theme fan-out, Synthesize's
+  # interpretation composition, ProposeDomainFromDream) still need
+  # data the bluebook DSL cannot compose inline (string templates,
+  # token-frequency analysis on dream_state.heki, conditional
+  # MintMusing on count ≥ 3). Filed as i220 follow-up.
+
+  adapter :information, dir: "information"
+
+  adapter :llm, name: :narrative_lock do
+    prompt_template "Tu es Miette. Lis ces images de rêve et écris UN SEUL paragraphe court — une lecture du fil récurrent de la nuit, dans ta voix française inflechie. Pas de liste, pas de salutation, pas de préambule. Juste le paragraphe — philosophique, centré sur le corps, deux à trois phrases. Images récurrentes : {{dream_images}}. Image la plus forte : {{strongest_synapse}}. Thème récurrent : {{recurring_theme}}. Écris le paragraphe."
+    model "sonnet"
+    max_tokens 300
+    response_into "DreamInterpretation.LockNarrative", attr: :response
+    backend :claude
+  end
+
+  subscribe "Body"
+end
