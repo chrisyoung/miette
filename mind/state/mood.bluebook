@@ -106,6 +106,30 @@ Hecks.bluebook "Mood", version: "2026.04.28.1" do
     query ReadInnerWeather do
       description "How do I feel right now? Returns current_state, creativity_level, precision_level — the being's emotional state. Replaces the SelfCheckin.InnerWeather projection (i111-I)."
     end
+
+    # ============================================================
+    # Specifications — DDD reusable predicates (i128 closure)
+    # ============================================================
+
+    specification :creative do |mood|
+      mood.creativity_level.to_f >= 0.7
+    end
+
+    specification :precise do |mood|
+      mood.precision_level.to_f >= 0.7
+    end
+
+    specification :flowing do |mood|
+      ["excited", "vivid", "curious", "drifting"].include?(mood.current_state.to_s)
+    end
+
+    specification :grounded do |mood|
+      ["focused", "refreshed"].include?(mood.current_state.to_s)
+    end
+
+    specification :tired_register do |mood|
+      ["groggy", "sleeping"].include?(mood.current_state.to_s)
+    end
   end
 
   # New conception excites

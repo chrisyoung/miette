@@ -84,6 +84,13 @@
 # threshold creates room for.
 
 Hecks.bluebook "BodyLucidity", version: "2026.05.02.1" do
+
+  # Phase 10 glossary lock — bridge-vocabulary discipline.
+  glossary(strict: true) do
+    prefer "Lucidity", not: ["lucid-mode", "dream-steering", "awakening-in-dream"]
+    prefer "lucid",    not: ["self-aware-dreaming", "dream-control"]
+    prefer "bridge",   not: ["link", "connector", "merge-point"]
+  end
   vision "The bridge that fires when Mind rejoins active Dream during cycle 8 REM. Owns the observe-from-within + steer-the-dream vocabulary — Mind's je speaking from inside Dream."
   category "body"
 

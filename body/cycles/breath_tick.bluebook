@@ -1,0 +1,19 @@
+Hecks.bluebook "BreathCadence", version: "2026.05.02.1" do
+  vision "The breath's alternation as bluebook. Every ~4s, BreathTick dispatches both Inhale and Exhale ; Breath's existing given clauses (phase==exhaling for Inhale ; phase==inhaling for Exhale) gate which one mutates. Cadence schedules ; given gates."
+  category "body"
+
+  # ============================================================
+  # BREATH TICK — phase alternation every ~4s
+  # ============================================================
+  #
+  # The 0.2 Hz rhythm of inhale/exhale. Dispatching both commands per
+  # tick lets Breath's lifecycle handle the routing — same pattern
+  # SleepCycle PM uses for cycle-8 lucid routing on Body. Cadence is
+  # content-free about phase ; the aggregate's given clauses pick.
+
+  cadence "BreathTick" do
+    every "4s"
+    dispatch "Breath.Inhale", name: "breath"
+    dispatch "Breath.Exhale", name: "breath"
+  end
+end

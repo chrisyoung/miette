@@ -53,5 +53,25 @@ Hecks.bluebook "Signal", version: "2026.04.26.1" do
       then_set :kind, to: "archived"
       emits "SignalArchived"
     end
+
+    # ============================================================
+    # Specifications — DDD reusable predicates (i128 closure)
+    # ============================================================
+
+    specification :archived do |sig|
+      sig.kind.to_s == "archived"
+    end
+
+    specification :live do |sig|
+      sig.kind.to_s != "archived"
+    end
+
+    specification :archive_eligible do |sig|
+      # Cold-signal rule the consolidate.sh sweep applies today :
+      # access_count ≤ 3 AND not yet archived. Age check (>20s)
+      # belongs to the caller (the sweep) since the spec doesn't
+      # see the wall-clock ; this names the static half.
+      sig.kind.to_s != "archived" && sig.access_count.to_i <= 3
+    end
   end
 end

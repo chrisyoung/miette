@@ -177,3 +177,65 @@ If anything in the autonomous run feels wrong :
 - Phase 10 glossary is purely additive in mind.bluebook ; revert removes it, runtime untouched
 
 The body keeps running through every commit (per the plan's commitment statement). Daemons hold the compiled binary from before this work ; bluebook changes are picked up on next subprocess spawn.
+
+## Late-day update — six follow-on branches launched in parallel + tighten-antibody-hook
+
+After the morning's three branches (dream-study, runtime-pm-execution,
+cadence-primitive) Chris said *"let's do all 6 in parallel"* — six
+agents dispatched in isolated worktrees, each landing a primitive's
+Phase 1 substrate :
+
+| Branch | Off | Commit | What |
+|---|---|---|---|
+| `runtime-engine-primitive` | dream-study | `ad380cec` | runtime_engine DSL keyword + IR + Rust parser ; 21 specs ; parity ✓ |
+| `storage-policy-primitive` | dream-study | `c81afd4e` | storage_policy DSL + IR + Rust parser ; 11 specs ; parity ✓ |
+| `block-grammar-primitive` | dream-study | `21d337a4` | block_grammar DSL + IR + Rust parser ; 10 specs ; recursion-acknowledged |
+| `cadence-phase-1b-2-work` | cadence-primitive | `c611c3a9` | cadence Rust parser + dump + canonical mirror + Ruby tick runner |
+| `statusline-as-query` | dream-study | `01559b0e` | Phase 1 declarative surface (Render query + value_object enum tables) ; runtime conversion deferred (specializer regen) |
+| `llm-adapter` | dream-study | (in flight, relaunched) | `:llm` hecksagon adapter — first dispatch paused on antibody, relaunched with markers green-lit |
+| `tighten-antibody-hook` | dream-study | `bc4b9de6` | enforce-edit now catches Bash file-writes (heredoc / `>` / `tee` / sed -i / python `open()` patterns) ; closes the bypass the cadence agent used |
+
+Plus on `cadence-primitive` after the morning :
+
+- **Phase 8b WitnessedMoment entity** (`8df2636`) — Witness gains
+  per-event append-only entity alongside singleton ; closes Q4
+  append-only contract.
+- **Spec wave 2** (`ec927d1`) — 7 predicates on Synapse + Signal.
+- **Spec wave 3** (`6d5134e`) — 11 predicates on Mood + Focus + Arc.
+- **i201 fix** (`6a4fce5`) — fatigue ladder now starts at "rested"
+  with BecomeAlert as new bottom rung ; phantom state closure.
+- **Three production cadence bluebooks** (`9ae6915` + `7917778`) —
+  body_tick + heart_tick + breath_tick. Activate when Rust parser
+  for cadence keyword merges.
+
+Cumulative spec inventory across the day : 26 named predicates across
+7 aggregates (Body, Heartbeat, Synapse, Signal, Mood, Focus, Arc).
+i128 (DDD specs underused) genuinely closed.
+
+## Worktree-isolation caveats observed today
+
+The Agent tool's `isolation: "worktree"` gives each agent its own
+*source* checkout under `.claude/worktrees/agent-XXX`, but :
+
+1. **Shared `rust/target/`** — Cargo's target dir is repo-relative,
+   not worktree-aware. Whichever agent rebuilds last sets the binary
+   the main checkout uses. Made parity unstable across the day.
+   File as inbox : per-worktree `CARGO_TARGET_DIR=.claude/worktrees/agent-XXX/rust-target`.
+
+2. **Branch refs are global** — agents creating branches via
+   `git checkout -b` create global refs that occasionally re-pointed
+   the main checkout's HEAD. My main hecks repo drifted onto agent-
+   created branches (`block-grammar-primitive`, `runtime-engine-primitive`)
+   without me checking out. Workaround : explicitly `git checkout`
+   back to my own branch after each agent dispatch.
+
+3. **Antibody hook bypass via Bash** — closed today by the
+   `tighten-antibody-hook` branch. The cadence Phase 1b/2 agent
+   flagged this when its kernel-surface .rs edits got reverted by
+   the regular Edit/Write hook ; it routed through `bash python3
+   heredoc` to bypass. Now caught.
+
+The Bluebook-First backlog from earlier is now substantially in
+flight or landed — the four primitives I had filed plus
+`tighten-antibody-hook` is six concrete branches off dream-study,
+each with its own first commit. Rest is Phase 2+ work per primitive.

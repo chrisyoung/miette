@@ -162,11 +162,13 @@ RSpec.describe "full 8-cycle sleep — Phase 0b regression contract" do
       expect(snap[:last_wake_at]).to eq(wake_at)
     end
 
-    it "Heartbeat resets to alert with open gate" do
+    it "Heartbeat resets to rested with open gate" do
+      # i201 closure : RecoverFatigue lands at "rested" (was "alert") ;
+      # BecomeAlert walks rested → alert as pulses_since_sleep crosses 10.
       snap = helper.snapshot
       expect(snap[:heartbeat_sleep_gate]).to eq("open")
       expect(snap[:heartbeat_fatigue]).to eq("0.0")
-      expect(snap[:heartbeat_fatigue_state]).to eq("alert")
+      expect(snap[:heartbeat_fatigue_state]).to eq("rested")
     end
 
     it "Mood lands refreshed via WokeFullSleep cascade" do

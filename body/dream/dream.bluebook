@@ -63,6 +63,13 @@ Hecks.bluebook "BodyDream", version: "2026.05.02.1" do
   vision "Autonomous dream-content production during REM. Draws seeds from the 10-source pool at sleep onset, generates one image per REM tick via :llm, feeds dream_pulses back to Body so SleepCycle can advance. Runs without Mind ; the dream-character's voice is not the awake-self's."
   category "body"
 
+  # Phase 10 glossary lock — body-side dream vocabulary.
+  glossary(strict: true) do
+    prefer "Dream",        not: ["dreamer", "dream-content", "dream-stream"]
+    prefer "Body",         not: ["Consciousness", "soma"]
+    prefer "perseveration", not: ["repetition", "recurrence-loop"]
+  end
+
   process_manager "Dream" do
     correlates_by :name              # singleton "dream"
     starts_on    "SleepEntered"      # incubates as soon as Body falls asleep

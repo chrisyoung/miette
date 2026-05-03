@@ -77,7 +77,8 @@ RSpec.describe "wake chain — chains 3, 4, 5" do
       helper.step("AdvanceRemToDeep")
 
       # Post-policy assertion (currently fails ; will pass when policy lands).
-      expect(helper.heartbeat_attr(:fatigue_state)).to eq("alert")
+      # i201 closure : RecoverFatigue → "rested" (was "alert").
+      expect(helper.heartbeat_attr(:fatigue_state)).to eq("rested")
       expect(helper.heartbeat_attr(:fatigue).to_f).to eq(0.0)
       expect(helper.heartbeat_attr(:pulses_since_sleep).to_i).to eq(0)
     end
@@ -119,7 +120,9 @@ RSpec.describe "wake chain — chains 3, 4, 5" do
 
       expect(helper.emitted?("WokenUp")).to be(true)
       # Fatigue cleared by RecoverFatigue.
-      expect(helper.heartbeat_attr(:fatigue_state)).to eq("alert")
+      # i201 closure : lands at "rested" (was "alert") ; BecomeAlert
+      # walks rested → alert as pulses cross 10.
+      expect(helper.heartbeat_attr(:fatigue_state)).to eq("rested")
       expect(helper.heartbeat_attr(:fatigue).to_f).to eq(0.0)
       expect(helper.heartbeat_attr(:pulses_since_sleep).to_i).to eq(0)
       expect(helper.emitted?("FatigueRecovered")).to be(true)
