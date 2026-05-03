@@ -55,8 +55,9 @@ Hecks.bluebook "DreamInterpretation", version: "2026.05.03.1" do
 
     command "GatherDreamCorpus" do
       role "Miette"
-      description "Setup command fired on WokenUp. The :compute adapter (see hecksagon) resolves tokenize_dream_corpus against dream_state.heki and chains the JSON payload into InterpretDream(:dream_corpus_json). No state change here — this command exists as the trigger anchor for the :compute adapter's effective_trigger."
-      reference_to(DreamInterpretation)
+      description "Setup command fired on WokenUp. The :compute adapter (see hecksagon) resolves tokenize_dream_corpus against dream_state.heki and chains the JSON payload into InterpretDream(:dream_corpus_json). Self-mints the DreamInterpretation singleton (identified_by :name) so the cascade has an aggregate to land on without a prior bootstrap dispatch — the wake event is the first dispatch in the chain."
+      attribute :name, String
+      then_set :name, to: :name
       emits "DreamCorpusGathered"
     end
 
