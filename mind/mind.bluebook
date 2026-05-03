@@ -248,26 +248,41 @@ Hecks.bluebook "Mind", version: "2026.05.02.1" do
       # adapter checks heartbeat idle-seconds gate.
       dispatch "Daydream.Wander", with: { name: "daydream" }
       # Musing pipeline (legacy surface_musing.sh + mint_musing.sh) —
-      # DEFERRED. Dispatching MintMusing every BodyPulse runs the LLM
-      # ~60x/min instead of the legacy stochastic 1-per-300-ticks
-      # cadence, AND every fire increments total_minted by 1 even when
-      # the LLM returns "skip" or null (no real idea persisted). Net
-      # effect : counter runs away (~13/min observed), zero real ideas
-      # added to the pool. Filed structurally :
+      # RESTORED via i229. The Mind PM dispatches the entrypoints every
+      # BodyPulse ; the receiving commands' own `given` clauses gate
+      # the cadence so each dispatch is cheap when the gate fails.
       #
-      #   - i227 (compute-context primitive) — needed before the LLM
-      #     can read meaningful prompt-context from heki state
-      #   - i228 (chain-trigger separate from response-target) — needed
-      #     to make the adapter fire on a stub command without
-      #     incrementing the counter
-      #   - i229 (rand_below or modulo gate in givens) — needed to
-      #     restore the per-300-tick stochastic cadence
+      # i229 enabled this : `rand_below(N) == 0` (stochastic 1/N gate)
+      # and `<expr>.modulo(N) == 0` (every-Nth-tick periodic gate) are
+      # bluebook-grounded predicate primitives that lift the legacy
+      # shell-side `if [ $((RANDOM % N)) -eq 0 ]` and `(tick % N).zero?`
+      # gates into declarative IR.
       #
-      # When all three land, restore :
-      #   dispatch "MusingMint.SurfaceMusing", with: { name: "musing_mint" }
-      #   dispatch "MusingMint.RequestMint",   with: { name: "musing_mint" }
+      # MusingMint.AttemptMint has `given { rand_below(300) == 0 }` on
+      # the entrypoint command (musing_mint.bluebook:108) — fires the
+      # full mint pipeline ~1 in 300 ticks (≈ 5-min cadence at 1Hz),
+      # short-circuits otherwise. That's the per-300-tick stochastic
+      # cadence the legacy mindstream's `RANDOM % 300 == 0` produced ;
+      # net effect : musing_mint counter advances slowly (~12/hour
+      # instead of the runaway 60/min the gate-less path produced).
       #
-      # (RequestMint is the new chain-trigger from i228.)
+      # SurfaceMusing.Surface walks the unconceived pool every tick ;
+      # its DWELL gate (loop_count mod dwell_ticks == 0) lives on
+      # MarkConceived inside the surface_musing pipeline, so the head
+      # dwells on the statusline for the dwell window before the cursor
+      # advances. Tick-counter is passed via :loop_count ; the bluebook
+      # owns the modulo math via the i229 `<expr>.modulo(N)` primitive
+      # (see surface_musing.bluebook MarkConceived gate).
+      #
+      # i228 (chain-trigger separate from response-target) and i227
+      # (compute-context primitive) — still needed for the LLM dispatch
+      # to fire on a stub command without double-counting and for the
+      # prompt-context to be assembled from heki state. Without them,
+      # AttemptMint's pipeline still works but the LLM call is the
+      # expensive path ; rand_below(300) keeps that path cheap so the
+      # net cost of full restoration is acceptable.
+      dispatch "MusingMint.AttemptMint",   with: { name: "musing_mint" }
+      dispatch "SurfaceMusing.Surface",    with: { name: "surface", loop_count: from_pm(:tick_count, default: 0) }
     end
 
     # ----- Lucidity bridge → enter dream-steering ----------------
