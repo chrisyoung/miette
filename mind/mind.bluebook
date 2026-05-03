@@ -248,9 +248,26 @@ Hecks.bluebook "Mind", version: "2026.05.02.1" do
       # adapter checks heartbeat idle-seconds gate.
       dispatch "Daydream.Wander", with: { name: "daydream" }
       # Musing pipeline (legacy surface_musing.sh + mint_musing.sh) —
-      # surface every tick, mint stochastically (gate inside bluebook).
-      dispatch "MusingMint.SurfaceMusing", with: { name: "musing_mint" }
-      dispatch "MusingMint.MintMusing", with: { name: "musing_mint" }
+      # DEFERRED. Dispatching MintMusing every BodyPulse runs the LLM
+      # ~60x/min instead of the legacy stochastic 1-per-300-ticks
+      # cadence, AND every fire increments total_minted by 1 even when
+      # the LLM returns "skip" or null (no real idea persisted). Net
+      # effect : counter runs away (~13/min observed), zero real ideas
+      # added to the pool. Filed structurally :
+      #
+      #   - i227 (compute-context primitive) — needed before the LLM
+      #     can read meaningful prompt-context from heki state
+      #   - i228 (chain-trigger separate from response-target) — needed
+      #     to make the adapter fire on a stub command without
+      #     incrementing the counter
+      #   - i229 (rand_below or modulo gate in givens) — needed to
+      #     restore the per-300-tick stochastic cadence
+      #
+      # When all three land, restore :
+      #   dispatch "MusingMint.SurfaceMusing", with: { name: "musing_mint" }
+      #   dispatch "MusingMint.RequestMint",   with: { name: "musing_mint" }
+      #
+      # (RequestMint is the new chain-trigger from i228.)
     end
 
     # ----- Lucidity bridge → enter dream-steering ----------------
