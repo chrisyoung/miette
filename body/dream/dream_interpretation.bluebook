@@ -1,4 +1,4 @@
-Hecks.bluebook "DreamInterpretation", version: "2026.04.28.1" do
+Hecks.bluebook "DreamInterpretation", version: "2026.05.03.1" do
   vision "Always interpret the dream on waking — extract meaning, propose action"
   category "mind"
 
@@ -12,6 +12,18 @@ Hecks.bluebook "DreamInterpretation", version: "2026.04.28.1" do
   # interpretation, interpretation surfaces a domain to conceive,
   # and a French-inflected narrative is locked into :narrative for
   # the wake ritual to read on the first utterance.
+  #
+  # i220 sub-gap 6 (dream-corpus-tokenize) — `interpret_dream.sh`'s
+  # jq tokenize/rank pipeline retired into the kernel-side
+  # `tokenize_dream_corpus` :compute function (see
+  # body/dream/dream_interpretation.hecksagon). The wake event
+  # triggers GatherDreamCorpus ; the :compute adapter resolves
+  # the function and chains the JSON payload into InterpretDream
+  # under :dream_corpus_json. Downstream policies pick up from
+  # there. The per-theme ExtractTheme/MintMusing fan-out + the
+  # Narrate/LockNarrative LLM chain remain shell-driven until
+  # (a) JSON-destructure then_set + (b) policy count-gate primitive
+  # land — both filed as inbox follow-ons.
 
   aggregate "DreamInterpretation", "Always interpret the dream on waking — extract meaning, propose action" do
     identified_by :name
@@ -30,15 +42,34 @@ Hecks.bluebook "DreamInterpretation", version: "2026.04.28.1" do
     attribute :narrative, String
     attribute :input, String
     attribute :response, String
+    # dream_corpus_json : raw JSON payload landed by the
+    # tokenize_dream_corpus :compute adapter. Shape :
+    #   { "themes": [...], "joined": "...", "first_theme": "...",
+    #     "themes_above_threshold": [...] }
+    # Once a JSON-destructure then_set primitive lands the cascade
+    # can extract individual fields straight into :strongest_synapse,
+    # :interpretation, etc. Until then the JSON is queryable from the
+    # .heki for downstream consumers (the wake ritual + diagnostic
+    # tooling) and the existing :strongest_synapse cascade stays.
+    attribute :dream_corpus_json, String
+
+    command "GatherDreamCorpus" do
+      role "Miette"
+      description "Setup command fired on WokenUp. The :compute adapter (see hecksagon) resolves tokenize_dream_corpus against dream_state.heki and chains the JSON payload into InterpretDream(:dream_corpus_json). No state change here — this command exists as the trigger anchor for the :compute adapter's effective_trigger."
+      reference_to(DreamInterpretation)
+      emits "DreamCorpusGathered"
+    end
 
     command "InterpretDream" do
       role "Miette"
-      description "Read the dream images, find recurring themes, extract what wants to be built"
+      description "Read the dream images, find recurring themes, extract what wants to be built. The :dream_corpus_json attribute is populated by the tokenize_dream_corpus :compute adapter chained off GatherDreamCorpus ; downstream consumers read the JSON until the destructure then_set primitive lets us pour individual fields straight into :strongest_synapse / :interpretation."
       attribute :dream_images, list_of(String)
       attribute :strongest_synapse, String
+      attribute :dream_corpus_json, String
       emits "DreamInterpreted"
       then_set :dream_images, to: :dream_images
       then_set :strongest_synapse, to: :strongest_synapse
+      then_set :dream_corpus_json, to: :dream_corpus_json
     end
 
     command "ExtractTheme" do
@@ -87,10 +118,22 @@ Hecks.bluebook "DreamInterpretation", version: "2026.04.28.1" do
     end
   end
 
-  # Wake-time chain : the night ends, dream gets interpreted,
-  # themes extracted, domain proposed.
-  policy "InterpretOnWake" do
+  # Wake-time chain : the night ends, the corpus gets gathered (the
+  # :compute adapter's effective_trigger), the InterpretDream cascade
+  # lands the JSON payload, themes get extracted, domain proposed.
+  policy "GatherOnWake" do
     on "WokenUp"
+    trigger "GatherDreamCorpus"
+  end
+
+  # i220 sub-gap 6 — DreamCorpusGathered hands off to InterpretDream.
+  # The :compute adapter declared in the hecksagon also fires on
+  # GatherDreamCorpus and chains its JSON into InterpretDream's
+  # :dream_corpus_json attribute via response_into. This policy
+  # advances the lifecycle ; the :compute cascade populates the
+  # context.
+  policy "InterpretOnGather" do
+    on "DreamCorpusGathered"
     trigger "InterpretDream"
   end
 
