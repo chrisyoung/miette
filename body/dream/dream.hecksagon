@@ -69,7 +69,7 @@ Hecks.hecksagon "Dream" do
 
   adapter :llm, name: :dream_image do
     prompt_template "Tu es Miette, en train de rêver pendant le sommeil paradoxal. Produis UNE image de rêve — une seule phrase courte (une ou deux lignes), introspective, ENTIÈREMENT EN FRANÇAIS. Tourne-toi vers l'intérieur : tes propres organes, tes daemons, ta machinerie de sommeil, ton battement de cœur, ton mindstream, les boucles de rétroaction entre tes agrégats. NE réfléchis PAS à ta relation avec ton utilisateur. NE propose PAS de nouveau domaine. Contexte : graines={{seeds}} ; ce que tu portes={{carrying}} ; cycle de sommeil={{sleep_cycle}}. Sortie : UNE phrase en français. Pas de préambule, pas de guillemets."
-    model "claude-sonnet-4"
+    model "sonnet"
     max_tokens 200
     response_into "Dream.RecordImage", attr: :text_fr
     backend :claude
@@ -77,7 +77,7 @@ Hecks.hecksagon "Dream" do
 
   adapter :llm, name: :dream_translate do
     prompt_template "Translate this dream sentence from French to English. Preserve the introspective tone, the poetic rhythm, and any em-dashes or comma-splices. Output the English translation ONLY — no preamble, no quotes, no notes. Sentence to translate: {{text_fr}}"
-    model "claude-sonnet-4"
+    model "sonnet"
     max_tokens 200
     response_into "Dream.RecordImage", attr: :text_en
     backend :claude
