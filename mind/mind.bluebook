@@ -118,7 +118,7 @@ Hecks.bluebook "Mind", version: "2026.05.02.1" do
          "with it, Mind reads-and-steers Dream from inside."
 
   process_manager "Mind" do
-    correlates_by :name              # Mind is a singleton, name="mind"
+    correlates_by :name              # Mind correlates by :name → instance keyed by event's name attr
     starts_on    "WokenUp"           # body wake → mind engages
     ends_on      "SleepEntered"      # body sleep → mind absent (unless lucid)
 
@@ -147,13 +147,33 @@ Hecks.bluebook "Mind", version: "2026.05.02.1" do
     end
 
     # ----- Per-tick organ math (the awake branch) ----------------
-    # PhaseElapsed during wake is the heartbeat of the mind. Each tick
+    # BodyPulse is the heartbeat of the mind during wake. The run-loop
+    # daemon emits one BodyPulse per second (correlation_id =
+    # "consciousness", matching Mind PM's instance key). Each pulse
     # fans out the full organ-update set the legacy mindstream.sh +
-    # pulse_organs.sh own today : MindstreamTick, Awareness snapshot
+    # pulse_organs.sh owned today : Tick increment, Awareness snapshot
     # (13 attrs — see runtime gap note below), Synapse strengthen+decay
     # for the carried topic, Signal fire (somatic + concept), Focus
-    # reweight, Arc advance. The bluebook commands clamp/decay/multiply
-    # internally (i106 DSL primitives) — the PM just dispatches.
+    # reweight, Arc advance, Daydream wander, MusingMint surface + mint.
+    # The bluebook commands clamp/decay/multiply internally (i106 DSL
+    # primitives) — the PM just dispatches.
+    #
+    # i219 heal (2026-05-02) : the prior trigger was `on "PhaseElapsed"`,
+    # which only fires during sleeping_* states (Consciousness.ElapsePhase
+    # is dispatched from BodyCycle PM only on sleeping_light/rem/deep/
+    # final_light per body_cycle.bluebook:137-149). Result : during
+    # attentive — the live state today — none of these wake dispatches
+    # fired. Daydreams didn't wander, musings didn't mint, awareness
+    # didn't snapshot. Switching to `on "BodyPulse"` puts the handler
+    # on the right event surface : BodyPulse fires every second during
+    # ALL consciousness states, but the state-machine transition
+    # `engaged_in_wake → engaged_in_wake` gates this handler to wake
+    # only (during sleep, Mind PM is in absent, no match). The lucid
+    # PhaseElapsed handler below (line 249) is untouched — that's a
+    # sleep-side state and PhaseElapsed is the right trigger there.
+    # BodyPulse correlation_id is "consciousness" (same as Mind PM's
+    # instance key, populated when WokenUp creates the PM) so the
+    # handler always finds its target instance.
     #
     # NOTE: Awareness.RecordMoment's 13 attrs (state, carrying, concept,
     # fatigue, synapse_strength, idle, excitement, age_days, updated_at,
@@ -170,15 +190,30 @@ Hecks.bluebook "Mind", version: "2026.05.02.1" do
     # that matches the legacy proc's `pm.attributes[:carrying] || "—"`
     # fallback exactly.
     #
+    # The wake handler dispatches Tick.MindstreamTick first to advance
+    # Tick.cycle (BodyCycle PM also dispatches it from its own
+    # BodyPulse handler, but that fires the same event ; the runtime
+    # idempotents — Tick.MindstreamTick is a singleton-write that
+    # increments :cycle whether dispatched once or twice per pulse).
+    #
+    # `from_event(:tick)` was the legacy attribute on PhaseElapsed
+    # before the heal — kept for receiving commands that expect a
+    # tick number. BodyPulse doesn't carry :tick, but the receiving
+    # commands fall back to their default. The prior `from_event(:tick)`
+    # values used in the legacy handler are preserved here for
+    # behaviour parity ; if specific receivers need a real tick
+    # number, the run-loop daemon's --emit can be extended to inject
+    # it on BodyPulse.
+    #
     # DEFERRED inside this handler : `Memory.Consolidate` fires only
     # when `tick % 60 == 0`. Surface B has no conditional dispatch ;
     # the cleanest path is to push the modulo gate to a given-clause
     # on Memory.Consolidate (Phase C pattern : fire-and-let-given-pick).
     # Filed as Phase 2.c follow-up.
-    on "PhaseElapsed", transition: { engaged_in_wake: :engaged_in_wake } do
+    on "BodyPulse", transition: { engaged_in_wake: :engaged_in_wake } do
       dispatch "Tick.MindstreamTick", with: { name: "tick" }
       dispatch "Awareness.RecordMoment", with: {
-        moment: from_event(:tick),
+        moment: from_event(:occurred_at),
         updated_at: from_event(:occurred_at)
       }
       dispatch "Synapse.StrengthenOrBirth", with: {
@@ -208,14 +243,14 @@ Hecks.bluebook "Mind", version: "2026.05.02.1" do
       # `given { tick.modulo(60) == 0 }` when Phase 2.c lands ; until then
       # the legacy `if (tick % 60).zero?` fires this dispatch every tick
       # and Memory's existing internal gate idempotents the heavy work.
-      dispatch "Memory.Consolidate", with: { name: "memory", tick: from_event(:tick) }
+      dispatch "Memory.Consolidate", with: { name: "memory" }
       # Daydream during idle windows (legacy daydream.sh) — runtime
       # adapter checks heartbeat idle-seconds gate.
-      dispatch "Daydream.Wander", with: { name: "daydream", tick: from_event(:tick) }
+      dispatch "Daydream.Wander", with: { name: "daydream" }
       # Musing pipeline (legacy surface_musing.sh + mint_musing.sh) —
       # surface every tick, mint stochastically (gate inside bluebook).
-      dispatch "MusingMint.SurfaceMusing", with: { tick: from_event(:tick) }
-      dispatch "MusingMint.MintMusing", with: { tick: from_event(:tick) }
+      dispatch "MusingMint.SurfaceMusing", with: { name: "musing_mint" }
+      dispatch "MusingMint.MintMusing", with: { name: "musing_mint" }
     end
 
     # ----- Lucidity bridge → enter dream-steering ----------------
