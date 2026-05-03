@@ -432,7 +432,12 @@ carrying="${carrying%"${carrying##*[![:space:]]}"}"
 # Source from her OWN aggregates (body / mind / awareness / consciousness
 # / heart / breath / memory / vow), not the nursery. This keeps dreams
 # self-referential per i52 dream-content rule.
-self_domain=$(ls "$AGG"/*.bluebook 2>/dev/null \
+#
+# Recursive find — post-i118 R5 the aggregates/ tree is nested by domain
+# group (body/, mind/, awareness/, discipline/...). A flat `ls` returns
+# nothing and self_domain falls back to "myself" forever, so Claude gets
+# a near-identical prompt every REM tick and dream variation collapses.
+self_domain=$(find "$AGG" -name "*.bluebook" -type f 2>/dev/null \
   | xargs -n1 basename 2>/dev/null \
   | sed 's/\.bluebook$//' | tr '_' ' ' \
   | shuf | head -1)
