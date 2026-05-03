@@ -56,24 +56,26 @@ Hecks.bluebook "Signal", version: "2026.04.26.1" do
 
     # ============================================================
     # Queries (i101 first-class) — sweep sources for the
-    # Consolidation PM's for_each dispatches (i221-B / i225)
+    # Consolidation PM's for_each dispatches (i221-B / i225 / i226)
     # ============================================================
     #
-    # Note (parser gap : i101-where-comparators) : the bluebook DSL
-    # parser today recognises `where(field: value)` (Eq) only. The
-    # IR carries Lt/Lte/Gt/Gte/Ne but the parser doesn't yet wire
-    # `where(field: { ne: "archived" })`. As a workaround the live
-    # query falls back to `repo.all()` via the runtime sweep helper,
-    # and the receiving Store.PromoteSignal / Signal.ArchiveSignal
-    # commands' given clauses gate stale records. Filed as parser
-    # gap.
-    #
-    # Once the parser supports comparators :
-    #
-    #   query "cold" do
-    #     where(kind: { ne: "archived" })
-    #     where(access_count: { lte: "3" })
-    #   end
+    # i226 closed the parser gap : `where(field: { ne|lte: value })`
+    # hash-form comparators now round-trip Ruby ↔ Rust byte-equal.
+    # `cold` is now expressible directly as a first-class query —
+    # the Consolidation PM dispatches `for_each: { from: "Signal.cold" }`
+    # and only the archive-eligible records flow through Store.PromoteSignal
+    # and Signal.ArchiveSignal.
+
+    query "live" do
+      description "Every signal still in the working set (kind != 'archived'). Useful for quick observation snapshots ; production sweeps prefer the narrower `cold` query so they don't act on already-promoted signals."
+      where(kind: { ne: "archived" })
+    end
+
+    query "cold" do
+      description "Live signals whose access count has stayed at or below the consolidate threshold (3) — promotion + archive candidates for the Consolidation PM. Mirrors the `archive_eligible` specification, lifted into a first-class query so the PM can sweep it."
+      where(kind: { ne: "archived" })
+      where(access_count: { lte: 3 })
+    end
 
     # ============================================================
     # Specifications — DDD reusable predicates (i128 closure)
