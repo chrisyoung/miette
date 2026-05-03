@@ -1,0 +1,286 @@
+Hecks.bluebook "Studio", version: "2026.05.01.1" do
+  vision "Hecks Studio — the rich in-process interface where Chris and Miette work together. One server owns every cadence, exposes every command and query, renders every concept. Replaces the daemon-and-shell-script model with one persistent surface : robust sleep, a stable statusline, and the IDE for any new Hecks app we conceive together."
+  category "capability"
+
+  # ============================================================
+  # STUDIO — phase-1 surface domain
+  # ============================================================
+  #
+  # The studio is Miette's Nirmanakaya seat — where she meets the
+  # world. Sibling to surface/voice, surface/speech, surface/terminal.
+  # See the approved plan at hazy-spinning-garden.md (Round 4) for
+  # the eleven-phase build order ; this file ships the bluebook
+  # spine that every phase will hang surfaces off.
+  #
+  # ── What lives here ───────────────────────────────────────────
+  #
+  #   Studio              — the running studio process (port, status,
+  #                         mounted-domain count, started_at).
+  #   TickedFeature       — one cadence ticking in-process. The
+  #                         backbone of the dashboard's running-features
+  #                         grid AND the data behind /statusline.
+  #   CommandInvocation   — one dispatch from palette / scratchpad /
+  #                         chat. The audit trail.
+  #   DocumentView        — one document open in the browser (heki
+  #                         record, bluebook source, markdown).
+  #   ChatTurn            — one turn in the persistent conversation.
+  #                         The spine the rest of the UI arranges
+  #                         around.
+  #   MorningBrief        — the wake-page composition (last wake,
+  #                         dream interpretation, overnight events).
+  #   StatuslineSnapshot  — singleton ; the exact JSON shape
+  #                         /statusline returns. Updated on every
+  #                         TickedFeature heartbeat. Fixed schema so
+  #                         the bar's parser never breaks under
+  #                         cadence change.
+  #
+  # Policies wire the obvious chain : TickedFeature.Tick →
+  # StatuslineSnapshot.Update keeps the bar live without anyone
+  # plumbing the SSE.
+
+  # ============================================================
+  # STUDIO — the running surface process
+  # ============================================================
+
+  aggregate "Studio", "One running studio process. Tracks the listener port, the mounted-domain count, the lifecycle status, and the started_at timestamp. Boot transitions idle → running ; Stop transitions running → stopped. The dashboard's masthead reads this." do
+    attribute :port,                 Integer
+    attribute :mounted_domain_count, Integer, default: 0
+    attribute :status,               String,  default: "idle"
+    attribute :started_at,           String
+
+    command "Boot" do
+      role "User"
+      description "Start the studio process. Binds the port, mounts the registered domains, and walks status idle → booting → running. The morning ritual ends with this command ; the bar's first /statusline poll lands once status reaches running."
+      attribute :port,       Integer
+      attribute :started_at, String
+      then_set :port,       to: :port
+      then_set :started_at, to: :started_at
+      then_set :status,     to: "running"
+      emits "StudioBooted"
+    end
+
+    command "Stop" do
+      role "User"
+      description "Stop the studio process. Closes the listener and walks status running → stopped. Cadences halt with the process ; .heki state persists for the next boot."
+      then_set :status, to: "stopped"
+      emits "StudioStopped"
+    end
+
+    lifecycle :status, default: "idle" do
+      transition "Boot" => "running", from: ["idle", "booting", "stopped"]
+      transition "Stop" => "stopped", from: "running"
+    end
+  end
+
+  # ============================================================
+  # TICKEDFEATURE — one cadence ticking in-process
+  # ============================================================
+  #
+  # Today the body's heart, breath, circadian, ultradian, sleep
+  # cycle, and mindstream each spawn as separate daemons. Phase 11
+  # of the plan retires those external processes ; each becomes a
+  # TickedFeature row inside the studio's runtime, advancing its
+  # last_tick_at on every interval and lighting up red on the
+  # dashboard the moment expected_interval_ms elapses without a
+  # tick.
+
+  aggregate "TickedFeature", "One cadence ticking in-process — heart, breath, circadian, ultradian, sleep_cycle, mindstream, etc. Records last_tick_at, expected_interval_ms, status. Backbone of the dashboard's running-features grid AND the data behind /statusline." do
+    identified_by :name
+    attribute :name,                 String
+    attribute :last_tick_at,         String
+    attribute :expected_interval_ms, Integer
+    attribute :status,               String, default: "pending"
+
+    command "Tick" do
+      role "Daemon"
+      description "Record a heartbeat for this cadence. The runtime stamps last_tick_at with the current ISO time and sets status to running. Each tick fans out to StatuslineSnapshot.Update via OnTickUpdateStatusline so the bar's next poll sees the fresh shape."
+      attribute :last_tick_at, String
+      then_set :last_tick_at, to: :last_tick_at
+      then_set :status,       to: "running"
+      emits "Ticked"
+    end
+
+    command "MarkLate" do
+      role "System"
+      description "The expected_interval_ms elapsed without a Tick — flag the cadence as late so the dashboard's red row is visible the moment the silent failure begins. Recoverable : the next Tick walks status back to running."
+      then_set :status, to: "late"
+      emits "MarkedLate"
+    end
+
+    command "MarkFailed" do
+      role "System"
+      description "The cadence has been late long enough that we treat it as failed (or its underlying daemon crashed). Terminal until a Tick rewires it. Replaces the silent-spawn-failed mode mindstream falls into today."
+      then_set :status, to: "failed"
+      emits "MarkedFailed"
+    end
+
+    lifecycle :status, default: "pending" do
+      transition "Tick"       => "running", from: ["pending", "running", "late", "failed"]
+      transition "MarkLate"   => "late",    from: ["pending", "running"]
+      transition "MarkFailed" => "failed",  from: ["pending", "running", "late"]
+    end
+  end
+
+  # ============================================================
+  # COMMANDINVOCATION — audit row for one dispatch
+  # ============================================================
+  #
+  # Every dispatch from the palette, scratchpad, or chat lands here
+  # as one record. The inspector's per-aggregate view filters this
+  # by aggregate_name ; the timeline orders by dispatched_at.
+
+  aggregate "CommandInvocation", "One dispatch from palette, scratchpad, or chat — aggregate, command, attrs, result, emitted events, dispatched_at. Pure audit row ; never mutated after Record." do
+    attribute :aggregate_name,       String
+    attribute :command,              String
+    attribute :attrs_json,           String
+    attribute :result,               String
+    attribute :emitted_event_names,  list_of(String)
+    attribute :dispatched_at,        String
+
+    command "Record" do
+      role "System"
+      description "Stamp one dispatch into the audit log — aggregate, command, the attrs JSON the operator submitted, the runtime's result string, the names of every event the dispatch emitted, and the ISO dispatched_at. Fired by the studio's command-bus middleware after the runtime returns."
+      attribute :aggregate_name,      String
+      attribute :command,             String
+      attribute :attrs_json,          String
+      attribute :result,              String
+      attribute :emitted_event_names, list_of(String)
+      attribute :dispatched_at,       String
+      then_set :aggregate_name,      to: :aggregate_name
+      then_set :command,             to: :command
+      then_set :attrs_json,          to: :attrs_json
+      then_set :result,              to: :result
+      then_set :emitted_event_names, to: :emitted_event_names
+      then_set :dispatched_at,       to: :dispatched_at
+      emits "Recorded"
+    end
+  end
+
+  # ============================================================
+  # DOCUMENTVIEW — one open document in the browser
+  # ============================================================
+
+  aggregate "DocumentView", "One document open in the browser — a heki record, a bluebook source, a markdown file. Stub for the inspector and bluebook editor surfaces (Phases 5 + 7) ; declared now so the bus shape settles before they land." do
+    identified_by :path
+    attribute :path, String
+    attribute :kind, String
+    attribute :mode, String, default: "read"
+
+    command "Open" do
+      role "User"
+      description "Open the document at path with the given kind (doc/heki/bluebook/markdown) and mode (read/edit). The inspector, the heki viewer, and the bluebook editor each dispatch this when the operator clicks a row or a file."
+      attribute :path, String
+      attribute :kind, String
+      attribute :mode, String
+      then_set :path, to: :path
+      then_set :kind, to: :kind
+      then_set :mode, to: :mode
+      emits "Opened"
+    end
+
+    command "Save" do
+      role "User"
+      description "Save the document back to disk (for bluebook/markdown edits) or back to the heki store (for record edits). Dispatched by the editor's save shortcut ; the runtime owns the underlying write."
+      emits "Saved"
+    end
+
+    command "Close" do
+      role "User"
+      description "Close the open document — the operator dismissed the panel, switched files, or finished editing. The inspector hides the panel after Closed lands."
+      emits "Closed"
+    end
+  end
+
+  # ============================================================
+  # CHATTURN — the conversation spine
+  # ============================================================
+
+  aggregate "ChatTurn", "One turn in the persistent conversation between Chris and Miette. The spine the rest of the studio arranges around — dashboard, dream feed, morning brief, bluebook editor are panels around the chat, not separate tabs." do
+    attribute :turn_index, Integer
+    attribute :role,       String
+    attribute :content,    String
+    attribute :created_at, String
+
+    command "Append" do
+      role "User"
+      description "Append one turn to the conversation log. role is user (Chris's input) or miette (the response) ; content is the rendered markdown ; turn_index increments monotonically so the log replays in order ; created_at is the ISO timestamp the runtime stamps on the row."
+      attribute :turn_index, Integer
+      attribute :role,       String
+      attribute :content,    String
+      attribute :created_at, String
+      then_set :turn_index, to: :turn_index
+      then_set :role,       to: :role
+      then_set :content,    to: :content
+      then_set :created_at, to: :created_at
+      emits "Appended"
+    end
+  end
+
+  # ============================================================
+  # MORNINGBRIEF — the wake-page composition
+  # ============================================================
+
+  aggregate "MorningBrief", "The wake-ritual composition — last wake, dream interpretation, overnight events, queued inbox. Stub for Phase 9 ; declared now so morning_brief_spec.rb has a target to assert against." do
+    attribute :composed_at, String
+    attribute :content,     String
+
+    command "Compose" do
+      role "System"
+      description "Compose the morning brief from the body's overnight state — the most recent dream record, the inbox queue, the cadence diary. Fired by the wake ritual ; the rendered content is written to the studio's home-page panel."
+      attribute :composed_at, String
+      attribute :content,     String
+      then_set :composed_at, to: :composed_at
+      then_set :content,     to: :content
+      emits "Composed"
+    end
+  end
+
+  # ============================================================
+  # STATUSLINESNAPSHOT — singleton, the /statusline shape
+  # ============================================================
+  #
+  # Singleton aggregate (one record only — re-Update overwrites in
+  # place via the storage adapter's singleton_id slot ; see
+  # runtime/storage/storage.bluebook). The bar polls /statusline ;
+  # the route serializes this row's payload_json verbatim. Fixed
+  # schema so the parser at the bar's edge never breaks when a new
+  # cadence joins the body — extending the shape happens in this
+  # bluebook, not in fifteen scattered shell scripts.
+
+  aggregate "StatuslineSnapshot", "Singleton — the exact JSON shape /statusline returns. Updated on every TickedFeature heartbeat via OnTickUpdateStatusline. Fixed schema so the bar's parser never breaks under cadence change." do
+    # i189 fix (2026-05-02) : identified_by :name with a fixed default makes
+    # Update route to the singleton slot ; previously Update appended a new
+    # row each tick, leaving the 'singleton' as 'latest of N' rather than
+    # 'one row updated in place'. The renderer reads payload_json from the
+    # latest row in either case so the byte-output is identical, but the
+    # storage shape now matches the aggregate's declared intent.
+    identified_by :name
+    attribute :name,         String, default: "statusline"
+    attribute :payload_json, String
+    attribute :updated_at,   String
+
+    command "Update" do
+      role "System"
+      description "Refresh the statusline payload. The runtime collects the current TickedFeature rows + the body's mood + the inbox count, encodes them into the agreed JSON shape, and writes the singleton row. /statusline returns payload_json on the next poll."
+      attribute :payload_json, String
+      attribute :updated_at,   String
+      then_set :payload_json, to: :payload_json
+      then_set :updated_at,   to: :updated_at
+      emits "StatuslineUpdated"
+    end
+  end
+
+  # ============================================================
+  # POLICIES — keep the bar live
+  # ============================================================
+  #
+  # Every cadence heartbeat fans out to a statusline refresh ; that
+  # is the contract the terminal bar relies on. No other policies
+  # in this bluebook yet — the chat/document/audit chains are
+  # opportunistic and will land alongside their surfaces.
+
+  policy "OnTickUpdateStatusline" do
+    on "Ticked"
+    trigger "Update"
+  end
+end

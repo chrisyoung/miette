@@ -38,5 +38,21 @@ Hecks.bluebook "Focus", version: "2026.04.26.1" do
       then_set :updated_at, to: :updated_at
       emits "WeightAdjusted"
     end
+
+    # ============================================================
+    # Specifications — DDD reusable predicates (i128 closure)
+    # ============================================================
+
+    specification :weighty do |f|
+      f.weight.to_f >= 0.7
+    end
+
+    specification :diffuse do |f|
+      f.weight.to_f < 0.3
+    end
+
+    specification :targeted do |f|
+      !f.target.to_s.empty? && f.target.to_s != "none"
+    end
   end
 end

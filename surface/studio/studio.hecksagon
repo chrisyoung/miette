@@ -1,0 +1,55 @@
+Hecks.hecksagon "Studio" do
+  # ============================================================
+  # STUDIO — capability wiring for the surface domain
+  # ============================================================
+  #
+  # The sibling studio.bluebook declares the seven aggregates
+  # (Studio, TickedFeature, CommandInvocation, DocumentView,
+  # ChatTurn, MorningBrief, StatuslineSnapshot). This file declares
+  # the capabilities the running studio composes from — every one
+  # already exists in hecks_conception ; the studio just bundles
+  # them under one process so the dashboard, chat, palette,
+  # inspector, and bluebook editor share one runtime.
+  #
+  # ── Composite concerns ────────────────────────────────────────
+  #
+  #   :webapp       — project_discovery, static_assets, websocket,
+  #                   live_reload, client_commands, readme.
+  #   :dev_tools    — tailwind, acceptance_test, web_client_state,
+  #                   web_debug.
+  #
+  # ── Domain rendering ──────────────────────────────────────────
+  #
+  #   :web_components — DaisyUI partials. Every concept is rendered
+  #                     by dispatching the matching partial, never
+  #                     hand-written HTML.
+  #
+  # ── Surfaces (Tier 1 + spine) ─────────────────────────────────
+  #
+  #   :chat_agent          — the conversation spine.
+  #   :event_store         — the timeline + the SSE source.
+  #   :server_lifecycle    — cadence lifecycle ; owns /statusline.
+  #   :crud                — aggregate inspector + heki record reads.
+  #   :ubiquitous_language — UL alongside each rendered concept ;
+  #                          ul_tagging.js fills aria-description
+  #                          from the matching glossary entry.
+  #   :app_builder         — bootstrap / mount-app for new domains.
+  #
+  # ── Adapter ───────────────────────────────────────────────────
+  #
+  #   :information — the .heki store lives in miette-state/information.
+  #                  Path is relative to surface/studio/ : up three
+  #                  to ~/Projects, across to miette-state/information.
+
+  capabilities :webapp
+  capabilities :dev_tools
+  capabilities :web_components
+  capabilities :chat_agent
+  capabilities :event_store
+  capabilities :server_lifecycle
+  capabilities :crud
+  capabilities :ubiquitous_language
+  capabilities :app_builder
+
+  adapter :information, dir: "../../../miette-state/information"
+end

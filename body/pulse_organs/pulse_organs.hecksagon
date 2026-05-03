@@ -1,0 +1,37 @@
+Hecks.hecksagon "BodyPulseOrgans" do
+  # ============================================================
+  # PULSE ORGANS — production hecksagon
+  # ============================================================
+  #
+  # The sibling bluebook (body/pulse_organs/pulse_organs.bluebook) declares
+  # the Pulse process_manager that fans BodyPulse → four organ-step
+  # dispatches (Synapse / Signal / Focus / Remains). This hecksagon wires
+  # the persistence adapter the dispatches land through.
+  #
+  # :heki — cross-process persistence. The dispatches reach Synapse /
+  # Signal / Focus / Remains repositories ; their existing aggregates
+  # already declare their own persistence in their organ bluebooks
+  # (body/organs/{synapse,signal,focus,remains}.bluebook). The :heki
+  # adapter here is the PM-side declaration : the per-tick organ
+  # updates write through heki the same way the rest of the body does
+  # (vs. an :llm or :memory adapter on this aggregate, which would be
+  # wrong for the kernel-floor cadence layer).
+  #
+  # No :llm — the PM is pure orchestration. The four dispatches reach
+  # commands that do their own bluebook math (i106 multiply / clamp)
+  # and singleton or counter-minted writes ; no language model in the
+  # critical path of the heartbeat.
+  #
+  # ---- Activation moment ---------------------------------------
+  #
+  # Before this hecksagon : pulse_organs.sh imperatively forked
+  # hecks-life per dispatch each second, paying the boot cost N times
+  # per tick + carrying awk/jq math the DSL had since absorbed (i106).
+  #
+  # After this hecksagon : `hecks-life run-loop <body-tree> --emit
+  # BodyPulse:Pulse:pulse --every 1s` boots the runtime once, the
+  # PMEngine reacts to each BodyPulse, the four dispatches land
+  # through the runtime's command pipeline. The shell is gone.
+
+  adapter :heki                      # cross-process persistence — organ stores live in $INFO/<org>/<org>.heki
+end

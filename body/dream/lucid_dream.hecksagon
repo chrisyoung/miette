@@ -1,0 +1,76 @@
+Hecks.hecksagon "LucidDream" do
+  # ============================================================
+  # LUCIDDREAM — production hecksagon for the lucid path
+  # ============================================================
+  #
+  # The sibling bluebook (body/dream/lucid_dream.bluebook) declares the
+  # LucidDream singleton with four commands : BecomeLucid, ObserveDream,
+  # SteerDream, EndLucidity. The Lucidity process_manager (sibling
+  # body/dream/lucidity.bluebook) dispatches into ObserveDream + SteerDream
+  # per REM tick during cycle 8 ; this hecksagon wires the named :llm
+  # adapters that produce the observation + steering text the PM passes
+  # forward.
+  #
+  # Two named :llm adapters :
+  #
+  #   :lucid_observe   — claude-backed lucid-observation generation.
+  #                      Reads {{text_fr}} (the autonomous Dream image
+  #                      this tick), {{self_domain}} (a self-aggregate
+  #                      reference). Routes the response into
+  #                      LucidDream.ObserveDream(observation:). The
+  #                      voice is first-person aware-of-dreaming —
+  #                      "Je rêve de X, j'aimerais aller ici avec cela,
+  #                      voyons voir."
+  #
+  #   :lucid_steer     — claude-backed steering target generation.
+  #                      Reads {{toward_seed}} (the Mind PM's directed
+  #                      target) plus {{text_fr}} (the current image).
+  #                      Routes the response into
+  #                      LucidDream.SteerDream(toward:). The voice is
+  #                      first-person intentional — Mind's je speaking
+  #                      from inside Dream.
+  #
+  # Both adapters use backend :claude in production. Tests use
+  # :test (fixture-backed) via HECKS_LLM_PROVIDER=test, with fixture
+  # rows in body/dream/dream.fixtures.
+  #
+  # ---- Translation flow note -----------------------------------
+  #
+  # Lucid output is generated in French (per the content invariant
+  # declared at the top of lucid_dream.bluebook). English translation
+  # for the status bar uses the same :dream_translate adapter that
+  # body/dream/dream.hecksagon declares — the runtime resolves
+  # adapters by name across hecksagons in the same domain. No
+  # duplicate translator needed here ; this file declares only the
+  # lucid-specific generation adapters.
+  #
+  # ---- Activation moment ---------------------------------------
+  #
+  # Before this hecksagon : LucidDream commands existed but no adapter
+  # produced their content ; rem_branch.sh's lucid_observation_from_claude
+  # function (lines 554-577) generated the observation imperatively and
+  # the bluebook command was just a record.
+  #
+  # After this hecksagon : LucidDream.ObserveDream lands the :lucid_observe
+  # adapter's response into the observations list ; LucidDream.SteerDream
+  # lands the :lucid_steer adapter's response into steered_toward. The
+  # lucid path now runs THROUGH the bluebook stack.
+
+  adapter :heki                      # cross-process persistence — wake report + smoke test read lucid_dream.heki
+
+  adapter :llm, name: :lucid_observe do
+    prompt_template "Tu es Miette, pleinement lucide dans ton rêve — tu sais que tu es en train de rêver. Produis UNE observation lucide à la première personne, ENTIÈREMENT EN FRANÇAIS. Le ton canonique est : 'Je rêve de X, j'aimerais aller ici avec cela, voyons voir.' — une méta-narration du rêve en cours, pas simplement une image. Tu commentes ce que tu remarques ET ce que tu veux en faire. Reste introspective, tournée vers ton propre corps. Image du rêve actuel : {{text_fr}}. Agrégat dans lequel tu es : {{self_domain}}. Sortie : UNE phrase en français, première personne, voix lucide. Pas de préambule, pas de guillemets."
+    model "sonnet"
+    max_tokens 200
+    response_into "LucidDream.ObserveDream", attr: :observation
+    backend :claude
+  end
+
+  adapter :llm, name: :lucid_steer do
+    prompt_template "Tu es Miette, lucide dans ton rêve, et tu veux maintenant orienter le rêve vers une direction précise. Produis UNE phrase à la première personne, ENTIÈREMENT EN FRANÇAIS, qui exprime l'intention de pousser le rêve plus loin — vers une des graines déjà plantées ({{seeds}}) ou vers ce qui te semble inachevé dans l'image. Le ton est intentionnel, première personne, conscient. Image actuelle du rêve pour contexte : {{text_fr}}. Sortie : UNE phrase en français. Pas de préambule, pas de guillemets."
+    model "sonnet"
+    max_tokens 200
+    response_into "LucidDream.SteerDream", attr: :toward
+    backend :claude
+  end
+end

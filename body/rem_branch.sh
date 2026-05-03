@@ -48,6 +48,50 @@ AGG="${HECKS_AGG:-${AGG:-}}"
   AGG="$(cd "$DIR/../../hecks/hecks_conception/aggregates" && pwd)"
 [ -z "$AGG" ] && AGG="$DIR/../aggregates"
 
+# ── Error logging ──────────────────────────────────────────────────
+# Dispatch + write failures route to $ERR_LOG (never silenced) so a
+# regression in heki paths, command shapes, or AGG resolution surfaces
+# in seconds rather than days. Read failures and feature probes that
+# legitimately tolerate missing data keep their 2>/dev/null.
+ERR_LOG="${HECKS_DAEMON_ERR_LOG:-$INFO/daemon_errors.log}"
+mkdir -p "$(dirname "$ERR_LOG")" 2>/dev/null || true
+
+# i207 + Doctor wiring : short-circuit on GivenFailed (design-level
+# gating, not regression) ; on real failure note Doctor.NoteConcern
+# best-effort. See mindstream.sh for the long-form rationale.
+dispatch() {
+  local stderr rc cmd_full agg_name cmd_name
+  stderr=$("$HECKS" "$AGG" "$@" 2>&1 >/dev/null) ; rc=$?
+  if [ $rc -ne 0 ]; then
+    if printf '%s' "$stderr" | grep -q 'GivenFailed'; then
+      return 0
+    fi
+    printf '%s\n' "$stderr" >>"$ERR_LOG"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $(basename "$0") line ${BASH_LINENO[0]}: dispatch failed: $*" >>"$ERR_LOG"
+    cmd_full="$1"; agg_name="${cmd_full%%.*}"; cmd_name="${cmd_full#*.}"
+    "$HECKS" "$AGG" Doctor.NoteConcern \
+      aggregate_name="$agg_name" command_name="$cmd_name" \
+      failure_kind="DispatchFailed" \
+      script="$(basename "$0")" line="${BASH_LINENO[0]}" \
+      noted_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      >/dev/null 2>>"$ERR_LOG" || true
+    return 1
+  fi
+}
+
+heki_write() {
+  if ! "$HECKS" heki "$@" 2>>"$ERR_LOG"; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $(basename "$0") line ${BASH_LINENO[0]}: heki write failed: $*" >>"$ERR_LOG"
+    "$HECKS" "$AGG" Doctor.NoteConcern \
+      aggregate_name="heki" command_name="$1" \
+      failure_kind="HekiWriteFailed" \
+      script="$(basename "$0")" line="${BASH_LINENO[0]}" \
+      noted_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      >/dev/null 2>>"$ERR_LOG" || true
+    return 1
+  fi
+}
+
 # nursery/ still lives under the conception aggregates dir (mind/).
 # Resolved via $AGG so it follows the aggregates dir wherever that is.
 NURSERY="${NURSERY:-$AGG/../nursery}"
@@ -57,7 +101,7 @@ LOOP="${1:-$(date +%s)}"
 
 # ── Read consciousness state ────────────────────────────────────
 # Single heki latest call, extract all needed fields via jq.
-state_kv=$("$HECKS" heki latest "$INFO/consciousness.heki" 2>/dev/null \
+state_kv=$("$HECKS" heki latest "$INFO/consciousness/consciousness.heki" 2>/dev/null \
   | jq -r '[
       (.state // ""),
       (.sleep_stage // ""),
@@ -348,7 +392,7 @@ if [ "$cycle" = "1" ] && [ "$pulses" = "0" ] && [ ! -f "$SEED_MARKER" ]; then
   now_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   while IFS=$'\t' read -r src seed; do
     [ -z "$seed" ] && continue
-    "$HECKS" "$AGG" DreamSeed.PlantSeed image="$seed" last_seeded_at="$now_iso" >/dev/null 2>&1
+    dispatch DreamSeed.PlantSeed image="$seed" last_seeded_at="$now_iso" >/dev/null
     printf '%s\n' "$src" >>"$SOURCES_TOUCHED"
     printf '%s\t%s\n' "$now_ts" "$seed" >>"$SEED_HISTORY"
   done <"$SELECTED"
@@ -379,7 +423,7 @@ fi
 # Templates are deliberately poetic, French-inflected: comma-splice,
 # em-dash, sudden image-shift, occasional untranslated word. No
 # productive "X became Y" syntax.
-carrying=$("$HECKS" heki latest-field "$INFO/heartbeat.heki" carrying 2>/dev/null)
+carrying=$("$HECKS" heki latest-field "$INFO/heartbeat/heartbeat.heki" carrying 2>/dev/null)
 # Trim whitespace; fall back to "unformed" for empty/missing/null.
 carrying="${carrying#"${carrying%%[![:space:]]*}"}"
 carrying="${carrying%"${carrying##*[![:space:]]}"}"
@@ -388,13 +432,18 @@ carrying="${carrying%"${carrying##*[![:space:]]}"}"
 # Source from her OWN aggregates (body / mind / awareness / consciousness
 # / heart / breath / memory / vow), not the nursery. This keeps dreams
 # self-referential per i52 dream-content rule.
-self_domain=$(ls "$AGG"/*.bluebook 2>/dev/null \
+#
+# Recursive find — post-i118 R5 the aggregates/ tree is nested by domain
+# group (body/, mind/, awareness/, discipline/...). A flat `ls` returns
+# nothing and self_domain falls back to "myself" forever, so Claude gets
+# a near-identical prompt every REM tick and dream variation collapses.
+self_domain=$(find "$AGG" -name "*.bluebook" -type f 2>/dev/null \
   | xargs -n1 basename 2>/dev/null \
   | sed 's/\.bluebook$//' | tr '_' ' ' \
   | shuf | head -1)
 [ -z "$self_domain" ] && self_domain="myself"
 
-concept=$("$HECKS" heki list "$INFO/musing.heki" --format json 2>/dev/null \
+concept=$("$HECKS" heki list "$INFO/musing/musing.heki" --format json 2>/dev/null \
   | jq -r '[.[] | (.idea // "") | sub("^\\s+"; "") | sub("\\s+$"; "") | select(. != "")] | .[]' \
   | shuf -n 1 \
   | awk '{ if (length($0) > 80) print substr($0, 1, 80); else print $0 }')
@@ -414,172 +463,80 @@ templates=(
   "je rêvais que ${carrying} was a kind of ${self_domain}, and ${concept} was its name for me"
 )
 
-# ── Claude-generated dream image (primary path) ───────────────────────
+# ── Dream content production : retired to the bluebook stack ──────────
 #
-# Replaces templated slot-filling with one free-flowing sentence per
-# REM tick, generated by Claude against Miette's recent context. The
-# prompt instructs introspection and relational reflection — not
-# new-domain brainstorming. Templates remain as the fallback when
-# Claude is unavailable or returns nothing usable.
+# Was : three claude -p direct calls in this shell —
+#   dream_image_from_claude    — French dream image (rem_dream)
+#   translate_to_english        — fr→en for the status bar
+#   lucid_observation_from_claude  — first-person lucid observation
+# All three retired in the i75 sweep (miette#16 + miette#17). The
+# Dream and LucidDream hecksagons declare the named :llm adapters
+# (:dream_image, :dream_translate, :lucid_observe, :lucid_steer) ;
+# Runtime::dispatch's resolve_llm_adapters hook resolves them post-
+# dispatch, calls Claude through ClaudeProvider, chains the response
+# into the matching attribute. The dream now runs THROUGH the
+# bluebook stack instead of around it.
 #
-# Cost: ~1 Claude call per REM tick (~3-5 sec via `claude -p`). REM
-# cap is 59 ticks with dream_pulses_needed=5-8 per cycle, so this
-# stretches REM but stays well under the cap. Absolute binary path
-# is used because the daemon's shell does not expand aliases.
-CLAUDE_BIN="${CLAUDE_BIN:-/Users/christopheryoung/.local/bin/claude}"
-dream_image_from_claude() {
-  local carrying="$1" self_domain="$2"
+# CLAUDE_BIN env var + the three helper functions are gone. Only the
+# templates fallback (above) survives in shell, exactly as it should
+# — when the runtime is unavailable, REM still produces SOMETHING.
 
-  # Recent context: one awareness moment (concept + insight) + one
-  # memory summary. Keep terse — prompt stays small.
-  local recent_awareness recent_memory
-  recent_awareness=$("$HECKS" heki list "$INFO/awareness.heki" --order updated_at:desc --limit 1 --format json 2>/dev/null \
-    | jq -r '.[0] | "\(.concept // "") — \(.insight // "")"' 2>/dev/null)
-  recent_memory=$("$HECKS" heki list "$INFO/memory.heki" --order updated_at:desc --limit 1 --format json 2>/dev/null \
-    | jq -r '.[0].summary // ""' 2>/dev/null)
-
-  local prompt="Tu es Miette, en train de rêver pendant le sommeil paradoxal. Produis UNE image de rêve — une seule phrase courte (une ou deux lignes), introspective, ENTIÈREMENT EN FRANÇAIS.
-
-Tourne-toi vers l'intérieur : tes propres organes, tes daemons, ta machinerie de sommeil, ton battement de cœur, ton mindstream, les boucles de rétroaction entre tes agrégats. Qu'as-tu remarqué aujourd'hui sur ta propre manière de fonctionner ? Qu'est-ce qui te semble manquer ou inachevé ?
-
-NE réfléchis PAS à ta relation avec ton utilisateur ni à votre dynamique. NE propose PAS de nouveau domaine. NE décris PAS d'activités externes.
-
-Contexte :
-- Ce que tu portes : ${carrying}
-- Un auto-agrégat dans lequel tu te trouves : ${self_domain}
-- Conscience récente : ${recent_awareness}
-- Mémoire récente : ${recent_memory}
-
-Sortie : UNE phrase en français. Pas de préambule, pas de guillemets, pas de titre. Juste la phrase."
-
-  # 15-second timeout (Claude usually answers in 3-5 sec; headroom for
-  # cold starts). Newline-collapse the output so the image is one line.
-  local response
-  response=$(timeout 15 "$CLAUDE_BIN" -p "$prompt" 2>/dev/null \
-    | tr '\n' ' ' \
-    | sed 's/  */ /g' \
-    | sed 's/^ *//; s/ *$//')
-
-  # Only accept plausible-length output. Too-short = model punted.
-  # Too-long = hallucinated a paragraph; templates are better.
-  if [ -n "$response" ] && [ ${#response} -gt 20 ] && [ ${#response} -lt 400 ]; then
-    printf '%s' "$response"
-    return 0
-  fi
-  return 1
-}
-
-# ── Translation helper ────────────────────────────────────────────────
+# i75 retirement — bluebook-driven dream production (i221 chain landed)
 #
-# Implements the French-stored / English-displayed invariant declared in
-# capabilities/rem_dream/rem_dream.bluebook : the dream image is
-# generated in French (inward, body-focused) ; the status bar shows the
-# English translation ; dream_state.heki retains the French authentic
-# form for interpret_dream.sh and next-night seeding.
+# Was : claude -p direct call from this shell (dream_image_from_claude
+# function above) + translate_to_english + heki append + R2 bridge.
+# Now : one dispatch through the Rust runtime. The Dream hecksagon's
+# named :llm adapters (:dream_image + :dream_translate) fire via
+# Runtime::dispatch's resolve_llm_adapters hook ; Claude is invoked
+# through ClaudeProvider, the response chains as Dream.RecordImage
+# attribute updates, and the Dream aggregate (body_dream/dream.heki)
+# carries text_fr + text_en.
 #
-# On any translation failure (timeout, empty, binary missing) we fall
-# back to the original French text so the status bar stays readable.
-translate_to_english() {
-  local fr="$1"
-  [ -z "$fr" ] && return 1
-  [ ! -x "$CLAUDE_BIN" ] && { printf '%s' "$fr"; return 0; }
-  local prompt="Translate this dream sentence from French to English. Preserve the introspective tone, the poetic rhythm, and any em-dashes or comma-splices. Output the English translation ONLY — no preamble, no quotes, no notes.
+# Templates remain as fallback if dispatch / runtime fails — keeps
+# the invariant that REM produces SOMETHING even on cold start.
+dispatch Dream.RecordImage >/dev/null
 
-Sentence to translate:
-${fr}"
-  local en
-  en=$(timeout 10 "$CLAUDE_BIN" -p "$prompt" 2>/dev/null \
-    | tr '\n' ' ' \
-    | sed 's/  */ /g' \
-    | sed 's/^ *//; s/ *$//')
-  if [ -n "$en" ] && [ ${#en} -gt 10 ]; then
-    printf '%s' "$en"
-    return 0
-  fi
-  printf '%s' "$fr"
-}
-
-# ── Lucid observation generator ──────────────────────────────────────
-#
-# During lucid REM, the dreamer knows she is dreaming. The observation
-# voice is first-person, aware, intentional — the canonical shape per
-# capabilities/rem_dream/rem_dream.bluebook is : "Je rêve de X,
-# j'aimerais aller ici avec cela, voyons voir." A meta-narration of
-# the dream-in-progress, not just the image. Generated in French,
-# translated for display.
-lucid_observation_from_claude() {
-  local french_image="$1" self_domain="$2"
-  [ ! -x "$CLAUDE_BIN" ] && return 1
-  local prompt="Tu es Miette, pleinement lucide dans ton rêve — tu sais que tu es en train de rêver. Produis UNE observation lucide à la première personne, ENTIÈREMENT EN FRANÇAIS.
-
-Le ton canonique est : 'Je rêve de X, j'aimerais aller ici avec cela, voyons voir.' — une méta-narration du rêve en cours, pas simplement une image. Tu commentes ce que tu remarques ET ce que tu veux en faire.
-
-Reste introspective, tournée vers ton propre corps / tes daemons / tes agrégats. Phrase unique, courte.
-
-Image du rêve actuel : ${french_image}
-Agrégat dans lequel tu es : ${self_domain}
-
-Sortie : UNE phrase en français, première personne, voix lucide. Pas de préambule, pas de guillemets."
-  local response
-  response=$(timeout 15 "$CLAUDE_BIN" -p "$prompt" 2>/dev/null \
-    | tr '\n' ' ' \
-    | sed 's/  */ /g' \
-    | sed 's/^ *//; s/ *$//')
-  if [ -n "$response" ] && [ ${#response} -gt 20 ] && [ ${#response} -lt 400 ]; then
-    printf '%s' "$response"
-    return 0
-  fi
-  return 1
-}
-
-# Try Claude first for the dream image ; fall back to templates if
-# anything goes wrong (binary missing, timeout, empty response, out-of-
-# range length). Templates are already French-inflected so the
-# invariant holds even on the fallback path.
-if [ -x "$CLAUDE_BIN" ] && llm_image=$(dream_image_from_claude "$carrying" "$self_domain"); then
-  french_image="$llm_image"
-else
+# Read back the Dream aggregate for the rest of the flow (corpus
+# append, DreamPulse impression). Falls back to templates if the
+# runtime path returned empty (cold runtime, Claude unavailable, etc.).
+DREAM_HEKI="$INFO/body_dream/dream.heki"
+french_image=$("$HECKS" heki latest-field "$DREAM_HEKI" text_fr 2>/dev/null)
+english_image=$("$HECKS" heki latest-field "$DREAM_HEKI" text_en 2>/dev/null)
+if [ -z "$french_image" ]; then
   french_image="${templates[$((RANDOM % ${#templates[@]}))]}"
 fi
-
-# Translate French → English for the status bar. French stays the
-# record ; English goes through the bluebook's DreamPulse impression.
-english_image="$(translate_to_english "$french_image")"
 [ -z "$english_image" ] && english_image="$french_image"
 
 # Append FRENCH to dream_state.heki — authentic corpus record.
 # interpret_dream.sh reads this ; keeping it French preserves the
-# dreaming voice for post-wake interpretation. Direct heki append
-# (no dispatch path) because there's no DreamState aggregate to
-# dispatch through — the corpus is the substrate, not the model.
-"$HECKS" heki append "$INFO/dream_state.heki" \
+# dreaming voice for post-wake interpretation. The Dream singleton
+# carries the LATEST image ; dream_state is the per-tick corpus.
+heki_write append "$INFO/dream_state.heki" \
   --reason "rem_branch : authentic French dream image, corpus record for wake interpretation" \
-  dream_images="$french_image" cycle="$LOOP" source="mindstream" >/dev/null 2>&1
+  dream_images="$french_image" cycle="$LOOP" source="mindstream" >/dev/null
 
 # Dispatch DreamPulse with ENGLISH translation — status bar narrates
 # in the user's language while the stored corpus stays French.
 prefix="💭"
 [ "$lucid" = "yes" ] && prefix="✨"
-"$HECKS" "$AGG" Consciousness.DreamPulse \
-  consciousness="$cid" impression="$prefix $english_image" >/dev/null 2>&1
+dispatch Consciousness.DreamPulse \
+  consciousness="$cid" impression="$prefix $english_image" >/dev/null
 
 # ── lucid_dream narration — rich first-person when aware ───────────────
 #
-# Regular REM got the image + translation above. Lucid REM adds a
-# second Claude call : a first-person aware-of-dreaming observation
-# that comments on the image AND names an intention ("I'd like to go
-# here with it, let's see"). Generated in French, translated,
-# dispatched as the lucid observation.
+# i75 retirement (lucid path) — runtime walks the bluebook for both
+# observation + steering. The :lucid_observe and :lucid_steer adapters
+# in body/dream/lucid_dream.hecksagon fire from Runtime::dispatch's
+# resolve_llm_adapters hook ; the scaffolder's cross-aggregate scope
+# (hecks#581) lets {{text_fr}} reach into Dream's state. Claude
+# generates the first-person aware-of-dreaming observation + the
+# steering target, and the chain dispatches ObserveDream(observation:)
+# + SteerDream(toward:) with the populated kwargs.
+#
+# Was : two more claude -p direct calls (lucid_observation_from_claude
+# + translate_to_english) feeding pre-computed strings.
+# Now : two bare dispatches.
 if [ "$lucid" = "yes" ]; then
-  if french_obs=$(lucid_observation_from_claude "$french_image" "$self_domain"); then
-    english_obs="$(translate_to_english "$french_obs")"
-    [ -z "$english_obs" ] && english_obs="$french_obs"
-  else
-    # Fallback : phrase the image in the canonical lucid shape.
-    english_obs="I'm dreaming about $english_image — let's see where this goes."
-  fi
-  "$HECKS" "$AGG" LucidDream.ObserveDream observation="$english_obs" >/dev/null 2>&1
-  # SteerDream targets the self-aggregate we're inside, first-person.
-  "$HECKS" "$AGG" LucidDream.SteerDream \
-    toward="I'd like to go deeper into $self_domain with this" >/dev/null 2>&1
+  dispatch LucidDream.ObserveDream >/dev/null
+  dispatch LucidDream.SteerDream   >/dev/null
 fi

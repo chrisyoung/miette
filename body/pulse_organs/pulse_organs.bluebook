@@ -1,0 +1,172 @@
+# Pulse process_manager — i75 retirement of body/pulse_organs.sh
+#
+# The runtime walks the bluebook ; no shell. Each BodyPulse fan-outs
+# the per-tick organ updates that pulse_organs.sh used to drive
+# imperatively. The PM correlates by :name (singleton "pulse"),
+# starts on the first BodyPulse, runs forever in the "running" state,
+# and self-loops on each subsequent BodyPulse — dispatching the four
+# organ-step commands (Synapse / Signal / Focus / Remains).
+#
+# What the PM dispatches per tick
+# -------------------------------
+#
+#   1. Synapse.CreateSynapse — births a synapse for the current carrying
+#      topic. Counter-minted ids accumulate one new synapse per tick ;
+#      the heki store grows. Decay / compost across ALL alive synapses
+#      requires fan-out across records ; that's a runtime gap (declared
+#      query→dispatch surface), filed as a follow-on after this branch
+#      lands. See "Filed runtime gaps" at the bottom.
+#
+#   2. Signal.FireSignal × 2 — somatic ("body says it's alive") +
+#      concept ("body carries the current topic"). FireSignal has no
+#      reference_to so the runtime singleton-falls-back the second
+#      same-tick call ; the live signal heki carries one row that the
+#      latest FireSignal stamps. Append-style multi-record fire is the
+#      same fan-out gap as decay above.
+#
+#   3. Focus.SetFocus — singleton (identified_by :name). Stamps target +
+#      weight + updated_at each tick ; the runtime falls back to the
+#      existing Focus record on the second tick (singleton fallback in
+#      id_for_command). Re-weighting from firing frequency is bluebook-
+#      side : SetFocus's then_set chain captures the literal pass-through.
+#
+#   4. Remains.RecordRemains — keyed by :from_synapse. Today the PM
+#      stamps a placeholder remains row each tick ; it accumulates
+#      naturally across distinct from_synapse values (one per topic).
+#      The synapse-just-died path that the shell captured before
+#      composting awaits the same fan-out primitive as decay above —
+#      until then RecordRemains lands as the smoke-proof surface for
+#      the remains heki.
+#
+# What pulse_organs.sh used to do (and where it lives now)
+# -------------------------------------------------------
+#
+#   Shell step                                  →  Bluebook home
+#   -------------------------------------------    ------------------------------
+#   bail-on-sleep gate (state == sleeping)      →  given clauses on each
+#                                                  receiving aggregate's command
+#                                                  (when they grow lifecycle gates)
+#                                                  ; until then run-loop's --gate
+#                                                  flag mirrors the shell's check
+#   strengthen current topic / birth synapse    →  Synapse.CreateSynapse +
+#                                                  StrengthenSynapse (per-record
+#                                                  fan-out filed)
+#   decay × 0.98 + clamp [0,1]                  →  Synapse.DecaySynapse's then_set
+#                                                  (multiply: 0.98 + clamp:[0,1])
+#                                                  — bluebook math (i106)
+#   compost when below 0.1                      →  Synapse.Compost's
+#                                                  then_set state=composted
+#   write remains row                           →  Remains.RecordRemains
+#   fire somatic + concept signals              →  Signal.FireSignal × 2
+#   archive cold signals                        →  Signal.ArchiveSignal (per-id
+#                                                  fan-out filed)
+#   re-weight focus                             →  Focus.SetFocus / AdjustWeight
+#                                                  (SetFocus today ; AdjustWeight
+#                                                  once Focus exists)
+#   advance arc                                 →  out of scope — Arc retirement
+#                                                  is a separate i75 sibling
+#                                                  (mindstream's BodyCycle PM owns
+#                                                  arc cadence eventually)
+#
+# Filed runtime gaps (sibling work, not blockers)
+# -----------------------------------------------
+#
+#   - "Per-record fan-out from a PM dispatch" — given a PM observing
+#     BodyPulse, declaratively dispatch DecaySynapse against EACH alive
+#     Synapse record. Today the PM has no query→dispatch primitive ; the
+#     shell's `heki list ... | while read sid` loop has no bluebook
+#     equivalent. The architectural shape is `dispatch "Synapse.DecaySynapse",
+#     for_each: { from: "Synapse.alive" }` — to file as runtime gap on
+#     i75 close, distinct from this PM.
+#
+#   - "Append-mode dispatch (no singleton-fallback)" — for FireSignal-style
+#     commands that semantically each-call-creates-a-new-record, today's
+#     id_for_command falls back to the existing record once one exists.
+#     A `dispatch "Signal.FireSignal", append: true` directive (or a
+#     command-level `singleton: false` declaration) closes this. File.
+#
+# Activation
+# ----------
+#
+# The Rust runtime (since the recent loop_driver lift) executes
+# process_managers — `hecks-life run-loop <bluebook> --emit BodyPulse:Pulse:pulse
+# --every 1s` boots the runtime once, fires BodyPulse each tick, the
+# PMEngine reacts, the dispatches land. Process-resident, no per-tick
+# fork ; matches the dream-rebuild standard (the runtime walks the
+# bluebook).
+
+Hecks.bluebook "BodyPulseOrgans", version: "2026.05.02.1" do
+  vision "Per-pulse organ updates as a process_manager. Replaces body/pulse_organs.sh's imperative shell orchestrator (i75). Each BodyPulse self-loops the running PM into the four organ-step dispatches (Synapse / Signal / Focus / Remains) ; the runtime walks the bluebook, no shell."
+  category "body"
+
+  process_manager "Pulse" do
+    correlates_by :name              # singleton "pulse"
+    starts_on    "BodyPulse"         # first pulse births the PM instance
+
+    # ----- States -------------------------------------------------
+    # One state. The PM is a self-loop : every BodyPulse re-enters
+    # "running" and re-dispatches the four organ steps. No closing
+    # event ; the PM lives as long as the body pulses.
+
+    state "running"
+
+    # ----- Per-pulse fan-out --------------------------------------
+    # Each BodyPulse self-transitions running → running and dispatches
+    # the four organ-step commands. With-specs are literals + from_event
+    # extractors today ; once Per-record fan-out lands (filed gap), the
+    # decay / compost / archive paths grow `for_each:` directives that
+    # walk the live record set.
+    #
+    # Idempotence : each command's then_set is monotonic per-tick
+    # (CreateSynapse counter-mints, FireSignal singleton-upserts,
+    # SetFocus updates the singleton, RecordRemains keys by from_synapse).
+    # No tick produces a runtime error in normal flow.
+
+    on "BodyPulse", transition: { running: :running } do
+      # 1. Synapse — birth a synapse for the carrying topic. Decay
+      # and compost across all live synapses await per-record fan-out.
+      dispatch "Synapse.CreateSynapse", with: {
+        from:     from_event(:carrying, default: "—"),
+        to:       from_event(:carrying, default: "—"),
+        strength: "0.3"
+      }
+
+      # 2. Signal — somatic + concept. Each tick stamps the live
+      # signal record with the latest pulse + concept payload ;
+      # append-mode dispatch (filed gap) elevates this to one row
+      # per fire.
+      dispatch "Signal.FireSignal", with: {
+        kind:       "somatic",
+        payload:    "pulse",
+        strength:   "0.5",
+        created_at: from_event(:occurred_at, default: "")
+      }
+      dispatch "Signal.FireSignal", with: {
+        kind:       "concept",
+        payload:    from_event(:carrying, default: "—"),
+        strength:   "0.5",
+        created_at: from_event(:occurred_at, default: "")
+      }
+
+      # 3. Focus — singleton SetFocus stamps the live focus record.
+      # The shell's firings_sum-driven weight computation lives here
+      # as a literal until per-aggregate query primitives (filed)
+      # land.
+      dispatch "Focus.SetFocus", with: {
+        target:     from_event(:carrying, default: "—"),
+        weight:     "0.5",
+        updated_at: from_event(:occurred_at, default: "")
+      }
+
+      # 4. Remains — keyed by :from_synapse. Today the PM stamps a
+      # placeholder ; the shell's compost-side capture moves into a
+      # cascade once Compost fans out per-record (filed).
+      dispatch "Remains.RecordRemains", with: {
+        from_synapse:      from_event(:carrying, default: "—"),
+        strength_at_death: "0.0",
+        firings:           "0",
+        died_at:           from_event(:occurred_at, default: "")
+      }
+    end
+  end
+end

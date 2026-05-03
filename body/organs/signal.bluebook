@@ -9,8 +9,14 @@ Hecks.bluebook "Signal", version: "2026.04.26.1" do
   # If unaccessed (≤3) and old (>20s), pulse_organs.sh archives them.
 
   aggregate "Signal", "A short-lived message — somatic or conceptual" do
-    identified_by :ref
-    attribute :ref, String
+    # i204 fix : identify by the heki storage uuid (auto-populated)
+    # rather than :ref, which FireSignal never set and pulse_organs/
+    # consolidate's direct heki appends never wrote — every
+    # AccessSignal/ArchiveSignal dispatch was failing AggregateNotFound.
+    # 438 signals piled up unconsolidated for days because of this.
+    # Surfaced 2026-05-01 by the silent-fail sweep.
+    identified_by :id
+    attribute :id, String
     attribute :kind, String
     attribute :payload, String
     attribute :strength, Float
@@ -46,6 +52,26 @@ Hecks.bluebook "Signal", version: "2026.04.26.1" do
       reference_to(Signal)
       then_set :kind, to: "archived"
       emits "SignalArchived"
+    end
+
+    # ============================================================
+    # Specifications — DDD reusable predicates (i128 closure)
+    # ============================================================
+
+    specification :archived do |sig|
+      sig.kind.to_s == "archived"
+    end
+
+    specification :live do |sig|
+      sig.kind.to_s != "archived"
+    end
+
+    specification :archive_eligible do |sig|
+      # Cold-signal rule the consolidate.sh sweep applies today :
+      # access_count ≤ 3 AND not yet archived. Age check (>20s)
+      # belongs to the caller (the sweep) since the spec doesn't
+      # see the wall-clock ; this names the static half.
+      sig.kind.to_s != "archived" && sig.access_count.to_i <= 3
     end
   end
 end

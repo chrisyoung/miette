@@ -1,0 +1,381 @@
+# Mind process_manager — Phase 5 of dream-study
+#
+# Promoted from dream-study/draft/mind_pm.bluebook.draft on 2026-05-02
+# after Phase 1 (39f279d6), Phase 2 (be5db683), Phase 3 (48d33a75) all
+# landed. Creates the new mind/ room sibling to mind/awareness/, mind/state/,
+# mind/musings/, etc. — verified no name collision before promotion.
+#
+# Activation : runs in Ruby Hecks::Runtime. mindstream.sh awake branch +
+# pulse_organs.sh + daydream.sh + mint_musing.sh + surface_musing.sh remain
+# in production until the Rust runtime executes process_managers (follow-on
+# branch). Until then this PM is live in Ruby specs but a no-op in the
+# daemons that fork hecks-life subprocess per dispatch.
+#
+# Mind is the active driver — present during wake AND during lucid REM. Drives
+# the conversation, dispatches commands into Body's organs, steers the lucid
+# dream. Absent during non-lucid sleep — Body cycles, Dream produces, but
+# Mind isn't there.
+#
+# Subsumes (when engaged_in_wake) :
+#   - mindstream.sh awake branch (Tick.MindstreamTick + 13-attr Awareness snapshot)
+#   - pulse_organs.sh (synapse strengthen/decay, signal fire, focus reweight, arc advance)
+#   - daydream.sh (idle-time content)
+#   - mint_musing.sh + surface_musing.sh (creative-thought pipeline)
+#
+# Subsumes (when engaged_in_lucid_dream, via Lucidity bridge) :
+#   - LucidDream.SteerDream dispatches (the steering vocabulary)
+#   - The "I'd like to go deeper into <self_domain> with this" voice
+#
+# Key design choices :
+#
+#   - Three explicit states. `absent` is BOTH the start state (before first
+#     wake) and the rest state during non-lucid sleep — Mind is genuinely
+#     not present, not just paused.
+#   - Engagement is event-driven. WokenUp engages Mind ; SleepEntered makes
+#     it absent ; MindRejoinedDream (Lucidity-emitted) re-engages it inside
+#     the dream ; LucidityEnded makes it absent again.
+#   - Per-tick organ math (the pulse_organs.sh body) is a single PhaseElapsed
+#     handler that fans out into Synapse / Signal / Focus / Arc commands.
+#     The float math itself (decay×0.98, clamp [0,1], strengthen+0.02) lives
+#     INSIDE the bluebook commands (i106 DSL primitives) — the PM just routes.
+#   - Witness subscriptions (Chris's clarification 2026-05-02) — Mind listens
+#     to WitnessObserved / WitnessReflectedOn so witnessing-as-input drives
+#     attention re-allocation and thought-arc composition.
+#   - The action procs return `{ commands: [...] }` matching the
+#     Hecks::EventSourcing::ProcessManager runtime API exactly. Phase 1's
+#     DSL captures these as Procs to be invoked at runtime.
+
+Hecks.bluebook "Mind", version: "2026.05.02.1" do
+  vision "The active driver. Present during wake AND lucid REM ; absent during non-lucid sleep. Subsumes the mindstream awake branch + pulse_organs + daydream + musing pipeline + lucid steering."
+  category "mind"
+
+  # ============================================================
+  # Phase 10 (dream-study) — glossary lock for the new vocabulary
+  # ============================================================
+  #
+  # Strict mode catches drift : any reference to "Consciousness" /
+  # "soma" / "agent" / "ego" / etc. in this domain fails antibody.
+  # Define entries below give each preferred term its formal
+  # definition (UL glossary).
+
+  glossary(strict: true) do
+    prefer "Body",       not: ["Consciousness", "soma", "anatomy", "physiology"]
+    prefer "Mind",       not: ["agent", "self", "ego", "thinker"]
+    prefer "Witness",    not: ["observer", "presence", "the-aware"]
+    prefer "Dream",      not: ["dreamer", "dream-content", "dream-stream"]
+    prefer "Lucidity",   not: ["lucid-mode", "dream-steering", "awakening-in-dream"]
+    prefer "SleepCycle", not: ["sleep-loop", "night-cycle", "sleep-arc"]
+  end
+
+  define "Body",
+         "The physiological substrate. Always running, always in some state " \
+         "(attentive | sleeping | waking). The rhythm. Renamed from Consciousness " \
+         "in dream-study Phase 4."
+
+  define "Mind",
+         "The active driver — present during wake AND lucid REM, absent during " \
+         "non-lucid sleep. Subscribes to Body / Witness / Lucidity events ; " \
+         "dispatches commands into the body's organs (Synapse, Signal, Focus, Arc) " \
+         "during wake ; steers Dream content via Lucidity during lucid REM."
+
+  define "Witness",
+         "The always-present passive observer (Vedanta's sākṣin, the " \
+         "transcendental ego of phenomenology). Never absent, even in deep " \
+         "dreamless sleep. Records meaningful moments without driving them. " \
+         "Dispatches no active commands beyond Observe / ReflectOnObservation."
+
+  define "Dream",
+         "The autonomous content production during REM. Runs WITHOUT Mind. " \
+         "Produces dream images via :llm adapter ; the dream-character " \
+         "experiences the dream — not the awake-self. The je of Dream is " \
+         "the dream-character's je, not Mind's."
+
+  define "Lucidity",
+         "The bridge — fires when Mind rejoins active Dream during cycle 8 " \
+         "REM (the bridge condition : Body.LucidRemEntered AND Mind.Present). " \
+         "Owns the observe-from-within-dream + steer-the-dream vocabulary."
+
+  define "lucid",
+         "An adjective applied to REM phases where Lucidity is active — " \
+         "Mind has rejoined Dream and is observing-and-steering inside the " \
+         "dream-content stream. Today : only cycle 8 REM."
+
+  define "studying_dream",
+         "The closing state of SleepCycle PM. After CompleteFinalLight " \
+         "(natural wake), SleepCycle is in studying_dream — running dream " \
+         "interpretation, filing actionable lessons to inbox, composing the " \
+         "wake report."
+
+  define "perseveration",
+         "Recurrence of the same dream themes night-over-night. Dream's " \
+         "diversity rules counter this : seed exclusion (no overlapping " \
+         "5-char keyword from last 72h), forced novelty (≥1 unused-source " \
+         "seed per night)."
+
+  define "bridge",
+         "What Lucidity does : connect Mind to Dream during cycle 8 REM. " \
+         "Without the bridge, Dream produces autonomously and Mind is absent ; " \
+         "with it, Mind reads-and-steers Dream from inside."
+
+  process_manager "Mind" do
+    correlates_by :name              # Mind correlates by :name → instance keyed by event's name attr
+    starts_on    "WokenUp"           # body wake → mind engages
+    ends_on      "SleepEntered"      # body sleep → mind absent (unless lucid)
+
+    # ----- States --------------------------------------------------
+    # `engaged_in_wake` is the active driver state — full per-tick organ
+    # math, daydream, musing, awareness snapshot. `engaged_in_lucid_dream`
+    # is the dream-steering state — only Lucidity bridges into here.
+    # `absent` is the rest state during non-lucid sleep AND the initial
+    # state before first wake.
+
+    state "engaged_in_wake"
+    state "engaged_in_lucid_dream"
+    state "absent"
+
+    # ----- Wake engagement ---------------------------------------
+    # WokenUp fires the PM into existence (starts_on) AND transitions
+    # absent → engaged_in_wake. Triggers the wake-side init : interpret
+    # the night's dream + compose wake report (the legacy mindstream.sh
+    # gap-4 wake-hook detection). These commands are idempotent — if
+    # SleepCycle's studying_dream tail already ran them, they no-op.
+
+    # Phase 2.b (pm-dispatch-enrichment) — declarative form.
+    on "WokenUp", transition: { absent: :engaged_in_wake } do
+      dispatch "DreamInterpretation.Compose", with: { sleep_cycle: from_event(:sleep_cycle) }
+      dispatch "WakeReport.Compose",          with: { sleep_cycle: from_event(:sleep_cycle) }
+    end
+
+    # ----- Per-tick organ math (the awake branch) ----------------
+    # BodyPulse is the heartbeat of the mind during wake. The run-loop
+    # daemon emits one BodyPulse per second (correlation_id =
+    # "consciousness", matching Mind PM's instance key). Each pulse
+    # fans out the full organ-update set the legacy mindstream.sh +
+    # pulse_organs.sh owned today : Tick increment, Awareness snapshot
+    # (13 attrs — see runtime gap note below), Synapse strengthen+decay
+    # for the carried topic, Signal fire (somatic + concept), Focus
+    # reweight, Arc advance, Daydream wander, MusingMint surface + mint.
+    # The bluebook commands clamp/decay/multiply internally (i106 DSL
+    # primitives) — the PM just dispatches.
+    #
+    # i219 heal (2026-05-02) : the prior trigger was `on "PhaseElapsed"`,
+    # which only fires during sleeping_* states (Consciousness.ElapsePhase
+    # is dispatched from BodyCycle PM only on sleeping_light/rem/deep/
+    # final_light per body_cycle.bluebook:137-149). Result : during
+    # attentive — the live state today — none of these wake dispatches
+    # fired. Daydreams didn't wander, musings didn't mint, awareness
+    # didn't snapshot. Switching to `on "BodyPulse"` puts the handler
+    # on the right event surface : BodyPulse fires every second during
+    # ALL consciousness states, but the state-machine transition
+    # `engaged_in_wake → engaged_in_wake` gates this handler to wake
+    # only (during sleep, Mind PM is in absent, no match). The lucid
+    # PhaseElapsed handler below (line 249) is untouched — that's a
+    # sleep-side state and PhaseElapsed is the right trigger there.
+    # BodyPulse correlation_id is "consciousness" (same as Mind PM's
+    # instance key, populated when WokenUp creates the PM) so the
+    # handler always finds its target instance.
+    #
+    # NOTE: Awareness.RecordMoment's 13 attrs (state, carrying, concept,
+    # fatigue, synapse_strength, idle, excitement, age_days, updated_at,
+    # inbox_count, inbox_open_themes, unfiled_wishes, moment) currently
+    # require cross-store reads (heartbeat / mood / focus / inbox /
+    # dream_wish hekis). Until policies grow `with_attrs` cross-store
+    # reads, the runtime may need an adapter to fill those attrs ; the
+    # PM's RecordMoment dispatch carries only `moment` here and an
+    # adapter resolves the rest. Filed as runtime gap.
+
+    # Phase 2.b (pm-dispatch-enrichment) — declarative form.
+    # `from_pm(:carrying, default: "—")` always falls through to the
+    # default in Phase 2.b (PM attribute writes land in Phase 2.c) ;
+    # that matches the legacy proc's `pm.attributes[:carrying] || "—"`
+    # fallback exactly.
+    #
+    # The wake handler dispatches Tick.MindstreamTick first to advance
+    # Tick.cycle (BodyCycle PM also dispatches it from its own
+    # BodyPulse handler, but that fires the same event ; the runtime
+    # idempotents — Tick.MindstreamTick is a singleton-write that
+    # increments :cycle whether dispatched once or twice per pulse).
+    #
+    # `from_event(:tick)` was the legacy attribute on PhaseElapsed
+    # before the heal — kept for receiving commands that expect a
+    # tick number. BodyPulse doesn't carry :tick, but the receiving
+    # commands fall back to their default. The prior `from_event(:tick)`
+    # values used in the legacy handler are preserved here for
+    # behaviour parity ; if specific receivers need a real tick
+    # number, the run-loop daemon's --emit can be extended to inject
+    # it on BodyPulse.
+    #
+    # DEFERRED inside this handler : `Memory.Consolidate` fires only
+    # when `tick % 60 == 0`. Surface B has no conditional dispatch ;
+    # the cleanest path is to push the modulo gate to a given-clause
+    # on Memory.Consolidate (Phase C pattern : fire-and-let-given-pick).
+    # Filed as Phase 2.c follow-up.
+    on "BodyPulse", transition: { engaged_in_wake: :engaged_in_wake } do
+      dispatch "Tick.MindstreamTick", with: { name: "tick" }
+      dispatch "Awareness.RecordMoment", with: {
+        moment: from_event(:occurred_at),
+        updated_at: from_event(:occurred_at)
+      }
+      dispatch "Synapse.StrengthenOrBirth", with: {
+        from: from_pm(:carrying, default: "—"),
+        last_fired_at: from_event(:occurred_at)
+      }
+      dispatch "Synapse.DecayAll", with: { name: "synapse" }
+      dispatch "Signal.FireSomatic", with: {
+        payload: "pulse",
+        created_at: from_event(:occurred_at)
+      }
+      dispatch "Signal.FireConcept", with: {
+        payload: from_pm(:carrying, default: "—"),
+        created_at: from_event(:occurred_at)
+      }
+      dispatch "Signal.ArchiveCold", with: {
+        name: "signal",
+        as_of: from_event(:occurred_at)
+      }
+      dispatch "Focus.Reweight", with: {
+        target: from_pm(:carrying, default: "—"),
+        updated_at: from_event(:occurred_at)
+      }
+      dispatch "Arc.Advance", with: { name: "arc" }
+      # Consolidation sweep every 60 ticks — DEFERRED (see header).
+      # The receiving Memory.Consolidate command will gain a given-clause
+      # `given { tick.modulo(60) == 0 }` when Phase 2.c lands ; until then
+      # the legacy `if (tick % 60).zero?` fires this dispatch every tick
+      # and Memory's existing internal gate idempotents the heavy work.
+      dispatch "Memory.Consolidate", with: { name: "memory" }
+      # Daydream during idle windows (legacy daydream.sh) — runtime
+      # adapter checks heartbeat idle-seconds gate.
+      dispatch "Daydream.Wander", with: { name: "daydream" }
+      # Musing pipeline (legacy surface_musing.sh + mint_musing.sh) —
+      # surface every tick, mint stochastically (gate inside bluebook).
+      dispatch "MusingMint.SurfaceMusing", with: { name: "musing_mint" }
+      dispatch "MusingMint.MintMusing", with: { name: "musing_mint" }
+    end
+
+    # ----- Lucidity bridge → enter dream-steering ----------------
+    # Lucidity PM emits MindRejoinedDream when both Body.lucid_rem_eligible
+    # AND Mind's presence overlap (cycle 8 REM today). Mind shifts from
+    # wake-driver to dream-steerer ; per-tick organ math pauses, lucid
+    # observe + steer dispatches take over.
+
+    # Phase 2.b — declarative. `pm.id` is the static singleton name
+    # "mind" (correlates_by :name) ; passed as a literal.
+    on "MindRejoinedDream", transition: { engaged_in_wake: :engaged_in_lucid_dream } do
+      dispatch "LucidDream.BecomeLucid", with: {
+        name: "mind",
+        became_lucid_at: from_event(:occurred_at)
+      }
+    end
+
+    # ----- Lucid REM tick — observe + steer ----------------------
+    # While engaged_in_lucid_dream, each PhaseElapsed dispatches the
+    # ObserveDream + SteerDream pair (the legacy rem_branch.sh lucid
+    # branch). The steering target carries first-person English
+    # ("I'd like to go deeper into <self_domain> with this").
+
+    # DEFERRED — the original proc string-interpolates the `target`
+    # value into "I'd like to go deeper into <target> with this".
+    # Surface B has no string-template ValueSpec ; Phase 2.c either
+    # lands a `template:` form OR pushes the interpolation to the
+    # receiving LucidDream.SteerDream command (which receives `toward`
+    # as a structured kwarg + builds the sentence Ruby-side / Rust-side).
+    # Stays Ruby-proc until then.
+    on "PhaseElapsed", transition: { engaged_in_lucid_dream: :engaged_in_lucid_dream } do |event, pm|
+      target = pm.attributes[:self_domain] || "myself"
+      { commands: [
+          { name: "LucidDream.ObserveDream", attrs: { name: pm.id, observation: event.attributes[:observation] } },
+          { name: "LucidDream.SteerDream",   attrs: { name: pm.id, toward: "I'd like to go deeper into #{target} with this" } }
+      ] }
+    end
+
+    # ----- Lucidity closes → mind absent -------------------------
+    # Lucidity PM emits LucidityEnded when cycle 8 REM closes into deep.
+    # Mind goes absent ; the body completes the cycle without driver.
+
+    on "LucidityEnded", transition: { engaged_in_lucid_dream: :absent } do
+      dispatch "LucidDream.EndLucidity", with: {
+        name: "mind",
+        ended_at: from_event(:occurred_at)
+      }
+    end
+
+    # ----- Body fell asleep → mind absent ------------------------
+    # SleepEntered makes Mind absent (unless Lucidity rejoins later).
+    # ends_on declared above also archives the PM instance on this event.
+
+    on "SleepEntered", transition: { engaged_in_wake: :absent } do
+      # no-op — Body's own SleepEntered handlers cascade ; this PM
+      # transition just flips state. ends_on archives the instance.
+    end
+
+    # ----- Witness subscriptions ---------------------------------
+    # Chris's clarification 2026-05-02 — Mind subscribes to Witness events.
+    # Witnessing-as-input is the passive observation channel ; Mind reads
+    # those observations and re-allocates attention or composes thought-arcs.
+
+    on "WitnessObserved", transition: { engaged_in_wake: :engaged_in_wake } do
+      # A moment of awareness was recorded by Witness. Mind incorporates
+      # the observation into its current carrying topic — an attention
+      # re-allocation rather than a new dispatch.
+      dispatch "Focus.NudgeToward", with: {
+        target: from_event(:concept),
+        updated_at: from_event(:occurred_at)
+      }
+    end
+
+    on "WitnessReflectedOn", transition: { engaged_in_wake: :engaged_in_wake } do
+      # A deeper Witness reflection — Mind composes a thought-arc capturing
+      # the reflection. ThoughtArc.Compose stitches awareness moments into
+      # a coherent strand.
+      dispatch "ThoughtArc.Compose", with: {
+        seed: from_event(:reflection),
+        composed_at: from_event(:occurred_at)
+      }
+    end
+  end
+end
+
+# ----- Notes for the Phase 5 PR --------------------------------
+#
+# Once Phase 1+3 merge :
+#   1. Move this file to mind/mind.bluebook (creating the new Mind room).
+#   2. Add mind/mind.hecksagon declaring :llm adapter for daydream / musing
+#      / lucid steering, :memory adapter for awareness snapshot reads.
+#   3. Delete mindstream.sh's awake branch (lines ~200-282 of mindstream.sh).
+#   4. Delete pulse_organs.sh (subsumed by PhaseElapsed handler's organ
+#      fan-out + i106 DSL math primitives).
+#   5. Delete daydream.sh, surface_musing.sh, mint_musing.sh (subsumed).
+#   6. Add Mind PM smoke spec under dream-study/test-gate/ — verify the
+#      three-state lifecycle + the per-tick fan-out command count (~10).
+#
+# Runtime gaps spotted while drafting :
+#
+#   - Awareness.RecordMoment's 13-attr cross-store fill currently lives
+#     shell-side because policies can't read cross-store. Until a
+#     `with_attrs` cross-store reader lands, an adapter has to bridge.
+#     Inbox-worthy : "policy with_attrs cross-store reads close mindstream
+#     gap 3".
+#   - Daydream.Wander's idle-window gate (10s ≤ idle ≤ 60s) is a
+#     heartbeat-side read — also cross-store. Same gap.
+#   - Synapse.StrengthenOrBirth needs a "find-or-create" semantic the DSL
+#     doesn't express today. Inbox-worthy : "DSL find_or_create on
+#     reference_to-less commands".
+#   - MindRejoinedDream is a NEW event Lucidity PM (Phase 6) must emit ;
+#     drafting this PM ahead of Lucidity is fine, just note the dependency.
+#   - ThoughtArc.Compose is a NEW command — no aggregate today. Either
+#     Arc gains a Compose command or a new ThoughtArc aggregate emerges.
+#     Inbox-worthy : "ThoughtArc aggregate or Arc.Compose command".
+#
+# ----- DSL surface check --------------------------------------
+#
+# Every DSL feature used in this draft :
+#   ✓ process_manager "Name" do … end
+#   ✓ correlates_by :field
+#   ✓ starts_on "EventName"
+#   ✓ ends_on "EventName"
+#   ✓ state "x" (x3)
+#   ✓ on "Event", transition: { from: :to } do |event, pm| ... end
+#
+# These match Phase 1's spec coverage exactly. No new DSL features required.
+# Mirrors sleep_cycle_pm.bluebook.draft's surface — the two PMs read consistent.

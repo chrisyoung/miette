@@ -1,0 +1,20 @@
+Hecks.hecksagon "BodyCycle" do
+  # ============================================================
+  # BODY CYCLE — adapter declarations
+  # ============================================================
+  #
+  # The BodyCycle PM is a state-mirror of consciousness driven by
+  # BodyPulse. It dispatches Tick.MindstreamTick when awake and
+  # Consciousness.ElapsePhase when asleep ; its own state needs to
+  # persist across `hecks-life run-loop` daemon restarts so the body
+  # picks up the cycle where it left off.
+  #
+  # Persistence : `:heki` cross-process. The PMEngine's
+  # `process_managers/body_cycle.heki` store keeps the singleton
+  # instance's correlation_id + state + last_event across restarts
+  # (see rust/src/runtime/pm_engine.rs `load_persisted` /
+  # `persist_instance`). No `:llm` adapter — LLM lives in
+  # Dream / LucidDream / MusingMint, not in the cycle scheduler.
+
+  adapter :heki                       # cross-process PM state persistence
+end

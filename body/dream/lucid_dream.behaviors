@@ -34,9 +34,13 @@ Hecks.behaviors "LucidDream" do
   end
 
   test "EndLucidity cascades through policy chain" do
+    # emits_subset (not strict emits) — once Witness Phase 8b landed,
+    # EndLucidity also fans into Observed → SelfModelUpdated via
+    # cross-bluebook policies. This test only locks the LucidDream →
+    # LucidMonitor chain ; the witness fan-out is owned by witness.behaviors.
     tests "EndLucidity", on: "LucidDream", kind: :cross_cascade
     setup  "StartLucidMonitor", log_path: "sample"
-    expect emits: ["LucidityEnded", "LucidMonitorStopped"]
+    expect emits_subset: ["LucidityEnded", "LucidMonitorStopped"]
   end
 
 

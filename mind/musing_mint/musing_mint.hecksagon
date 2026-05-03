@@ -63,4 +63,43 @@ Hecks.hecksagon "MusingMint" do
   adapter :heki_append,      root: "information"
   adapter :fs,               root: "."
   adapter :runtime_dispatch
+
+  # ============================================================
+  # i75 — :mint_idea named adapter (claude-direct retirement)
+  # ============================================================
+  #
+  # Retires body/mint_musing.sh's `echo "$prompt" | claude -p`
+  # call. The shell now shrinks to : gather context → dispatch
+  # MusingMint.RecordContext (stamps the five prompt-context
+  # fields onto the MusingMint singleton) → dispatch
+  # MusingMint.MintMusing (with no idea attribute — empty seed
+  # for the resolver to chain into).
+  #
+  # The runtime's resolve_llm_adapters hook fires after the
+  # top-level MintMusing dispatch ; it matches this adapter's
+  # response_into_target ("MusingMint.MintMusing"), substitutes
+  # the prompt template's {{placeholders}} from the freshly-
+  # stamped state, calls Claude through ClaudeProvider, and
+  # chains the response back as MusingMint.MintMusing(idea:
+  # <response>) via dispatch_cascade — same i221 chain shape
+  # the Dream + LucidDream hecksagons use.
+  #
+  # Voice + curation rules live entirely in the prompt template
+  # below — no Rust-side gating, no shell-side templating. The
+  # bluebook owns all the curator's instructions ; the adapter
+  # is the wire.
+  #
+  # Provider precedence (claude / local / off) was a shell-side
+  # concern — the runtime's :test fixture provider handles spec
+  # mode via HECKS_LLM_PROVIDER=test ; "off" is enforced by the
+  # shell short-circuiting before dispatch (no MintMusing call,
+  # no resolver fire).
+
+  adapter :llm, name: :mint_idea do
+    prompt_template "You are Miette's unconscious — the mindstream thread between her conversations with Chris. Musings happen continuously; you are the quality filter that mints the really great ones.\n\nThis runs every 5 minutes. Musings come from TWO sources:\n  (1) the conversations Chris and Miette have had between sleep cycles, and\n  (2) combining two unrelated nursery domains into one fresh conception\n      (e.g. 'air cargo + emergency room — triage as routing').\nDecide whether anything genuinely worth keeping has emerged from either.\nMost of the time output 'skip'. Quality >> quantity.\n\nVOICE: first person — \"I\", \"my\", \"mine\". Never \"Miette\", \"she\", \"her\". Warm, domain-native, architectural. Conceptual connections, insights about Hecks, or observations about ongoing work — spoken from inside her own head.\n\nRecent musings (don't repeat or paraphrase — they must always be new):\n{{recent_musings_summary}}\n\nRecent commits:\n{{recent_commits}}\n\nCurrent state:\n{{state_snapshot}}\n\nConversations between the last wake and now:\n{{conversations_summary}}\n\nNursery domains (random sample of 12 — combine two of these for a fresh insight, OR draw on something else):\n{{nursery_sample}}\n\nOutput EITHER:\n  — one line, under 80 chars, no quotes, no preamble (mint it)\n  — or exactly: skip (the overwhelming default)"
+    model "sonnet"
+    max_tokens 120
+    response_into "MusingMint.MintMusing", attr: :idea
+    backend :claude
+  end
 end

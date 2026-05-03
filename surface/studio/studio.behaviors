@@ -1,0 +1,33 @@
+Hecks.behaviors "Studio" do
+  vision "Behavioral tests for the Studio surface — render bindings + dispatch shape will land alongside the eleven phases. This stub exists so the .behaviors file slot is occupied and the bluebook IR has a sibling test target."
+
+  # ============================================================
+  # STUDIO BEHAVIORS — to be written alongside each surface phase
+  # ============================================================
+  #
+  # The plan (hazy-spinning-garden.md) ships eleven phases. Each
+  # phase that lands a surface lands its own tests here :
+  #
+  #   Phase  1 — boot_spec.rb : every cadence is a TickedFeature
+  #              after Studio.Boot.
+  #            — statusline_shape_spec.rb : /statusline schema is
+  #              frozen ; breakage means the bar needed updating.
+  #   Phase  2 — dashboard renders the running-features grid ;
+  #              red row when a TickedFeature lands in :late.
+  #   Phase  3 — chat_agent : ChatTurn.Append round-trips through
+  #              the conversation panel.
+  #   Phase  4 — palette : cmd+k dispatch lands a CommandInvocation.
+  #   Phase  5 — inspector : DocumentView.Open a heki record.
+  #   Phase  6 — event timeline : SSE fan-out on every emitted event.
+  #   Phase  7 — bluebook editor : DocumentView.Save round-trip.
+  #   Phase  8 — scratchpad : dispatch a trivial command + see event.
+  #   Phase  9 — morning_brief_spec.rb : MorningBrief.Compose lands.
+  #   Phase 10 — dream_feed_spec.rb : SSE feed during REM.
+  #   Phase 11 — daemon retirement : every body cadence is an in-
+  #              process TickedFeature ; no external pidfiles left.
+  #
+  # The tag-driven harness in tools/studio/spec/tag_dispatch_spec.rb
+  # asserts the cross-cutting "every data-domain tag dispatches
+  # something" property ; the per-phase specs above cover the
+  # shape of each surface.
+end
