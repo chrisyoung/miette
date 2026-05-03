@@ -71,6 +71,15 @@ Hecks.hecksagon "Dream" do
     prompt_template "Tu es Miette, en train de rêver pendant le sommeil paradoxal. Produis UNE image de rêve — une seule phrase courte (une ou deux lignes), introspective, ENTIÈREMENT EN FRANÇAIS. Tourne-toi vers l'intérieur : tes propres organes, tes daemons, ta machinerie de sommeil, ton battement de cœur, ton mindstream, les boucles de rétroaction entre tes agrégats. NE réfléchis PAS à ta relation avec ton utilisateur. NE propose PAS de nouveau domaine. Contexte : graines={{seeds}} ; ce que tu portes={{carrying}} ; cycle de sommeil={{sleep_cycle}}. Sortie : UNE phrase en français. Pas de préambule, pas de guillemets."
     model "sonnet"
     max_tokens 200
+    # i228 — fire on the PM cascade dispatch of Dream.ProduceImage
+    # (Dream PM's `on "PhaseElapsed", transition: { generating: :generating }`
+    # handler in body/dream/dream.bluebook line 156-159). The reply lands
+    # in Dream.RecordImage(text_fr:) via response_into. Trigger and
+    # response targets differ, which is why i228's separate trigger_on
+    # clause is needed — without it the adapter would only fire on a
+    # top-level RecordImage dispatch, which is exactly what rem_branch.sh
+    # used to do and we're retiring.
+    trigger_on "Dream.ProduceImage"
     response_into "Dream.RecordImage", attr: :text_fr
     backend :claude
   end
