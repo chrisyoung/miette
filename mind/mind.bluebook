@@ -141,9 +141,32 @@ Hecks.bluebook "Mind", version: "2026.05.02.1" do
     # SleepCycle's studying_dream tail already ran them, they no-op.
 
     # Phase 2.b (pm-dispatch-enrichment) — declarative form.
+    #
+    # i220 — WakeReview.ComposeWakeReview is dispatched from here so
+    # the wake-review chain (compute :dream_corpus_window → :llm
+    # :wake_review_compose → LockReport) is driven by Mind PM rather
+    # than wake_review.sh's manual chain. The :compute adapter on
+    # ComposeWakeReview reads dream_state.heki and populates
+    # :dream_corpus on the cascade re-entry ; the named :llm
+    # adapter then generates :response, which LockReport promotes
+    # to :report_markdown. The atomic write to
+    # /tmp/wake_review_latest.md still lives in body/wake_review.sh
+    # until the :fs adapter family lands (filed as gap).
+    #
+    # Note : WokenUp carries :wake_at but NOT :sleep_entered_at
+    # (the cycle entry timestamp lives on Sleep aggregate, not
+    # Consciousness). Until cross-aggregate dispatch-time reads
+    # land, sleep_entered_at remains empty on the initial dispatch
+    # — the compute adapter's empty-bound fallback safely returns
+    # an empty dream_corpus and the LLM template tolerates it
+    # ("Dream corpus (French) :\n"). The shell's complementary
+    # dispatch with full context (woke_at + sleep_entered_at via
+    # heki read of wake_report.heki) covers the production path
+    # until then.
     on "WokenUp", transition: { absent: :engaged_in_wake } do
       dispatch "DreamInterpretation.Compose", with: { sleep_cycle: from_event(:sleep_cycle) }
       dispatch "WakeReport.Compose",          with: { sleep_cycle: from_event(:sleep_cycle) }
+      dispatch "WakeReview.ComposeWakeReview", with: { woke_at: from_event(:wake_at) }
     end
 
     # ----- Per-tick organ math (the awake branch) ----------------
