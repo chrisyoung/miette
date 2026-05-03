@@ -76,10 +76,15 @@ Hecks.bluebook "BodyDream", version: "2026.05.02.1" do
     ends_on      "WokenUp"           # closes on natural wake
 
     # ----- States --------------------------------------------------
+    # i220-2 — dormant FIRST so create-on-starts_on lands the new
+    # instance in the state SleepEntered transitions FROM ; the prior
+    # ordering (incubating first) stranded fresh instances out of
+    # phase with the SleepEntered handler. Mirrors the Consolidation
+    # PM's `dormant` → first state convention.
+    state "dormant"                  # post-create, awaiting SleepEntered ; also between REM phases
     state "incubating"               # seeds drawn for the night
     state "generating"               # producing dream pulses during REM
     state "fading"                   # cycle 8 deep entry, content tapers
-    state "dormant"                  # between REM phases (light, deep, final_light)
 
     # ----- Sleep onset : plant the night's seeds -------------------
     # The 10-source draw lives in DreamSeed.PlantSeed dispatches —
