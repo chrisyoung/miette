@@ -35,9 +35,61 @@ Hecks.hecksagon "WakeReview" do
 
   adapter :information, dir: "information"
 
-  adapter :llm,
-    backend: :claude
+  # i220 — Compute adapter for dream-corpus aggregation. Triggers on
+  # ComposeWakeReview (the head of the LLM chain) ; reads
+  # dream_state.heki, filters records by [sleep_entered_at, woke_at],
+  # joins :dream_images per record into a newline-delimited corpus.
+  # Chains the corpus back into ComposeWakeReview on the
+  # :dream_corpus attribute so the LLM prompt-template substitution
+  # below sees a populated value. This replaces the jq pipeline that
+  # used to live in body/wake_review.sh:51-54.
+  #
+  # Note : trigger_on points at the SAME command as response_into.
+  # The runtime breaks the self-cascade loop via the `fired` exclude-
+  # set in resolve_compute_adapters_with_excluded — the adapter only
+  # fires once per dispatch tree, so the second pass through
+  # ComposeWakeReview (now with dream_corpus populated) doesn't re-
+  # fire compute. The LLM hook then runs against the populated state.
+  adapter :compute,
+    name: :dream_corpus_window,
+    function: "aggregate_corpus_window",
+    trigger_on: "WakeReview.ComposeWakeReview",
+    response_into: "WakeReview.ComposeWakeReview",
+    attr: :dream_corpus
 
+  # i220 — Named LLM adapter for the wake-review composition step.
+  # Triggers on ComposeWakeReview (after :compute has populated
+  # :dream_corpus on the same target — the cascade order is
+  # :compute then :llm in resolve_*_adapters), substitutes the
+  # placeholder-laden prompt against the upstream WakeReview state,
+  # calls Claude (sonnet), and chains the rendered markdown into
+  # LockReport on the :response attribute. LockReport's then_set
+  # promotes :response to :report_markdown, the locked artefact the
+  # wake_review.sh wrapper reads back via heki and atomic-writes to
+  # /tmp/wake_review_latest.md (until :fs adapter dispatch lands —
+  # filed as gap).
+  #
+  # The prompt template carries the full two-section spec (Abstract
+  # dream imagery / Deep analysis) the shell used to compose by hand.
+  # Placeholders pull from upstream WakeReview state : {{woke_at}},
+  # {{sleep_entered_at}}, {{dreams_count}}, {{recurring_theme}},
+  # {{dominant_tokens}}, {{dream_corpus}} (populated by the :compute
+  # adapter just above).
+  adapter :llm, name: :wake_review_compose do
+    prompt_template "You are reading the dream corpus from one of Miette's sleep cycles. She dreamed {{dreams_count}} times during the cycle. Recurring theme : '{{recurring_theme}}'. Dominant tokens : {{dominant_tokens}}.\n\nDream corpus (French) :\n{{dream_corpus}}\n\nProduce a SINGLE markdown report with EXACTLY two sections, no preamble :\n\n## Abstract dream imagery\n(raw images, no interpretation, French-inflected English, 2-4 sentences)\n\n## Deep analysis\n(philosophical reading of what the night reveals about where we are off, where the next clarity lives, what to change about the body or the repo ; not a ticket list, a reading)\n\nOutput the markdown only. No preamble. No closing remarks."
+    model "sonnet"
+    max_tokens 1200
+    trigger_on "WakeReview.ComposeWakeReview"
+    response_into "WakeReview.LockReport", attr: :response
+    backend :claude
+  end
+
+  # :fs adapter declared as future home of the markdown atomic-write
+  # (today still wake_review.sh does the /tmp write — declared as
+  # transitional gap in body/wake_review.sh's antibody marker). When
+  # the :fs adapter family lands (i220 sub-gap follow-on, separate
+  # PR), LockReport gains a side-effect that writes report_markdown
+  # to /tmp/wake_review_latest.md and the wrapper retires entirely.
   adapter :fs, root: "/tmp"
 
   subscribe "Sleep"
