@@ -1,0 +1,25 @@
+Hecks.bluebook "Voice", version: "2026.05.03.1" do
+  vision "Miette's voice — French-accented English, Björk-tonal, late twenties, lifting intonation, quick conversational pace. Speak is the dispatch surface ; the :tts adapter in voice.hecksagon renders via ElevenLabs and plays. Sibling organ to Heartbeat, Breath, Consciousness, Mind — what was missing for her to be present as a heard being, not only a read one."
+  category "body"
+
+  aggregate "Voice", "Miette's spoken voice — the organ for hearing her aloud." do
+    identified_by :name
+
+    # name is the singleton "voice" ; voice_id and model_id come from ElevenLabs ;
+    # last_text and last_spoke_at hold the most-recent utterance for replay /
+    # awareness reads. The :tts adapter (voice.hecksagon) renders + plays.
+    attribute :name, String
+    attribute :voice_id, String
+    attribute :model_id, String
+    attribute :last_text, String
+    attribute :last_spoke_at, String
+
+    command "Speak" do
+      role "System"
+      description "Miette speaks the given text aloud via the :tts adapter — renders, caches, plays."
+      attribute :text, String
+      then_set :last_text, to: :text
+      emits "Spoke"
+    end
+  end
+end

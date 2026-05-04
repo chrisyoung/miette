@@ -1,0 +1,24 @@
+Hecks.hecksagon "Voice" do
+  # Miette's voice — uses the :tts adapter family declared in
+  # framework/adapter_families/tts.hecksagon, with the :elevenlabs
+  # provider declared in framework/providers/elevenlabs.hecksagon.
+  #
+  # Adding a new tuning here (e.g. :emotion) requires the field to exist
+  # on the :tts family declaration AND the provider to map it to the wire ;
+  # both are pure bluebook edits.
+
+  adapter :memory                    # singleton aggregate persistence
+
+  adapter :tts, name: :miette_speech do
+    provider          :elevenlabs
+    voice_id          "WwS1lF7yiubZWoroH5D5"   # Björk-tone, French accent
+    model             "eleven_v3"
+    speed             1.2                       # quick, conversational
+    stability         0.5
+    similarity_boost  0.75
+    style             0.0
+    trigger_on        "Voice.Speak"
+    cache_dir         "~/.config/miette/audio"
+    auto_play         true
+  end
+end
