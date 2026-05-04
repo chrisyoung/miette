@@ -98,8 +98,9 @@ Hecks.bluebook "SurfaceMusing", version: "2026.04.26.1" do
 
     command "MarkConceived" do
       role "System"
-      description "Every DWELL-th call (when loop_count mod dwell_ticks == 0), mark the surfaced musing conceived so the cursor advances to the next-oldest. Prefix-matches on :idea via :heki_mark — covers both the idea==thought case (idea ≤ 80 chars) and the idea.startswith(thought) case (idea > 80 chars, thought is truncation)."
+      description "Every DWELL-th call (when loop_count mod dwell_ticks == 0), mark the surfaced musing conceived so the cursor advances to the next-oldest. Prefix-matches on :idea via :heki_mark — covers both the idea==thought case (idea ≤ 80 chars) and the idea.startswith(thought) case (idea > 80 chars, thought is truncation). i229's `<expr>.modulo(N)` predicate primitive lets the dwell gate live in the bluebook as declarative IR — `loop_count.modulo(30) == 0` fires every 30th call (≈ 5 min at 10s/tick). The hard-coded `30` matches the dwell_ticks default ; future revisions can route through `loop_count.modulo(dwell_ticks)` once the predicate primitive resolves attr-bound modulo args."
       given { loop_count > 0 }
+      given { loop_count.modulo(30) == 0 }
       then_set :phase, to: "advancing"
       emits "MusingConceived"
     end

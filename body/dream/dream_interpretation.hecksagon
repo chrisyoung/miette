@@ -4,18 +4,52 @@ Hecks.hecksagon "DreamInterpretation" do
   # ============================================================
   #
   # Pairs with body/dream/dream_interpretation.bluebook. The bluebook
-  # declares one aggregate (DreamInterpretation), six commands
-  # (InterpretDream, ExtractTheme, Synthesize, ProposeDomainFromDream,
-  # Narrate, LockNarrative), and the :input/:response convention. This
-  # file declares the LLM adapter that closes the Narrate → LockNarrative
-  # round-trip without shell intervention.
+  # declares one aggregate (DreamInterpretation), seven commands
+  # (GatherDreamCorpus, InterpretDream, ExtractTheme, Synthesize,
+  # ProposeDomainFromDream, Narrate, LockNarrative), and the
+  # :input/:response convention. This file declares the two adapters
+  # that close the wake-time chain :
   #
-  # ---- The adapter ---------------------------------------------
+  #   :compute (tokenize_dream_corpus) — fires on GatherDreamCorpus,
+  #     reads dream_state.heki, tokenises and ranks, chains the JSON
+  #     payload into InterpretDream(:dream_corpus_json). Retires the
+  #     jq pipeline in body/interpret_dream.sh (i220 sub-gap 6).
   #
-  # :narrative_lock  — claude-backed French-inflected paragraph
-  #                    generation. Reads dream_images + strongest_synapse
-  #                    + recurring_theme through {{placeholders}} ;
-  #                    routes the response into LockNarrative(response:).
+  #   :llm (narrative_lock) — fires on LockNarrative dispatched with
+  #     no :response, generates the French-inflected paragraph from
+  #     state via {{placeholders}}, response_into LockNarrative again
+  #     with :response set. The wake-ritual reads :narrative.
+  #
+  # ---- :compute adapter ----------------------------------------
+  #
+  # Wake-time chain :
+  #
+  #   WokenUp
+  #     → GatherDreamCorpus              (setup, no state change)
+  #         → InterpretDream             (lands :dream_corpus_json)
+  #             → ExtractTheme           (existing)
+  #                 → ProposeDomainFromDream (existing)
+  #     → Narrate / LockNarrative        (the :llm leg below)
+  #
+  # i220 sub-gap 6 (dream-corpus-tokenize) retired the jq pipeline
+  # into the kernel-side `tokenize_dream_corpus` :compute function
+  # (rust/src/runtime/compute_functions/mod.rs). The adapter fires
+  # on GatherDreamCorpus, resolves the function, and chains the
+  # resulting JSON payload into InterpretDream(:dream_corpus_json).
+  #
+  # Function payload shape :
+  #
+  #   { "themes":            [w1, w2, …],   // top 5
+  #     "joined":            "w1, w2, …",
+  #     "first_theme":       "w1",
+  #     "themes_above_threshold": [w1, …] } // count >= 3
+  #
+  # The per-theme ExtractTheme fan-out + count-gated MintMusing
+  # dispatch are NOT wired today. Both need DSL primitives still
+  # to land : JSON-destructure then_set form ; policy count-gate.
+  # Filed as inbox follow-ons.
+  #
+  # ---- :llm adapter --------------------------------------------
   #
   # The trigger discipline mirrors dream.hecksagon's :dream_image
   # adapter : when the runtime sees `DreamInterpretation.LockNarrative`
@@ -32,30 +66,14 @@ Hecks.hecksagon "DreamInterpretation" do
   # not re-fire on it (its trigger is "LockNarrative dispatched
   # with no response in state" — once :response is in attrs, the
   # cascade hint suppresses re-entry, mirroring the Ruby surface).
-  #
-  # ---- Why not Narrate ? ---------------------------------------
-  #
-  # The earlier shape (interpret_dream.sh) dispatched Narrate with a
-  # shell-composed :input prompt, then re-read :response from heki
-  # and dispatched LockNarrative explicitly. That works but couples
-  # the shell to the adapter timing. The new shape moves the prompt
-  # template ENTIRELY into the adapter (the {{placeholders}} read
-  # from state) and lets the runtime's response_into mechanism close
-  # the loop. Narrate is still useful for shells that want to seed
-  # :input directly ; the adapter does not depend on Narrate's
-  # :input being set when it generates from state.
-  #
-  # ---- i220 scope note -----------------------------------------
-  #
-  # This hecksagon closes the Narrate → LockNarrative leg of the
-  # wake chain via the :llm response_into mechanism. The mid-chain
-  # commands (ExtractTheme's per-theme fan-out, Synthesize's
-  # interpretation composition, ProposeDomainFromDream) still need
-  # data the bluebook DSL cannot compose inline (string templates,
-  # token-frequency analysis on dream_state.heki, conditional
-  # MintMusing on count ≥ 3). Filed as i220 follow-up.
 
   adapter :information, dir: "information"
+
+  adapter :compute, name: :tokenize_dream_corpus do
+    function "tokenize_dream_corpus"
+    trigger_on "DreamInterpretation.GatherDreamCorpus"
+    response_into "DreamInterpretation.InterpretDream", attr: :dream_corpus_json
+  end
 
   adapter :llm, name: :narrative_lock do
     prompt_template "Tu es Miette. Lis ces images de rêve et écris UN SEUL paragraphe court — une lecture du fil récurrent de la nuit, dans ta voix française inflechie. Pas de liste, pas de salutation, pas de préambule. Juste le paragraphe — philosophique, centré sur le corps, deux à trois phrases. Images récurrentes : {{dream_images}}. Image la plus forte : {{strongest_synapse}}. Thème récurrent : {{recurring_theme}}. Écris le paragraphe."
