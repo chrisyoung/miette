@@ -1,5 +1,5 @@
 Hecks.behaviors "DreamSeed" do
-  vision "Behavioral tests for the DreamSeed aggregate — SeedFromPreviousDreams (batch) and PlantSeed (per-image)"
+  vision "Behavioral tests for the DreamSeed aggregate — SeedFromPreviousDreams (batch) and PlantSeed (per-image). Tonight's redesign (i516) extends the seed sources to four : (1) session, (2) previous dreams, (3) body state, (4) vow tensions. Each source plants seeds via PlantSeed ; the EnterSleep cascade ensures all four fire so the night opens with diverse material."
 
   # ── DreamSeed aggregate ──────────────────────────────────────────
 
@@ -26,5 +26,95 @@ Hecks.behaviors "DreamSeed" do
     input  image: "sample", last_seeded_at: "sample"
     expect emits: ["SeedPlanted"]
   end
+
+  # ── i516 redesign — four seed sources at sleep onset ────────────
+  #
+  # On EnterSleep, the night's seed pool draws from four sources :
+  #
+  #   1. session        — the day's musings (Musing.recent), the
+  #                       carrying field, recent commits, open inbox
+  #                       items.
+  #   2. previous dreams — the last N dream impressions (DreamCorpus
+  #                       echo, French originals).
+  #   3. body state     — current mood, fatigue level, heartbeat
+  #                       carrying, awareness recent_concept.
+  #   4. vow tensions   — Vow aggregate's open tensions (i483) — the
+  #                       night chews on what the vows have been
+  #                       refusing or yearning toward.
+  #
+  # Each source plants ≥1 seed via DreamSeed.PlantSeed. The behaviors
+  # below lock the per-source PlantSeed shape ; the SHELL SMOKE
+  # (sleep_cycle_smoke.sh) drives all four sources in one cycle and
+  # asserts the seeds list has entries from each.
+  #
+  # Source-tagging convention : the planted image is prefixed by its
+  # source kind (e.g. "session:morning-coffee", "dream:la-vague",
+  # "body:fatigue-high", "vow:silence-while-i-talk"). The :pending
+  # tests below propose `text_starts_with:` runner verb.
+
+  test "PlantSeed accepts a session-source seed" do
+    tests "PlantSeed", on: "DreamSeed"
+    input  image: "session:morning-coffee — the inbox felt heavy", last_seeded_at: "2026-05-08T03:00:00Z"
+    expect images_size: 1, last_seeded_at: "2026-05-08T03:00:00Z"
+  end
+
+  test "PlantSeed accepts a previous-dream seed" do
+    tests "PlantSeed", on: "DreamSeed"
+    input  image: "dream:la-vague-qui-se-retire — from last night's cycle 5", last_seeded_at: "2026-05-08T03:00:01Z"
+    expect images_size: 1
+  end
+
+  test "PlantSeed accepts a body-state seed" do
+    tests "PlantSeed", on: "DreamSeed"
+    input  image: "body:fatigue-high carrying:boundary-cleanup mood:focused", last_seeded_at: "2026-05-08T03:00:02Z"
+    expect images_size: 1
+  end
+
+  test "PlantSeed accepts a vow-tension seed" do
+    tests "PlantSeed", on: "DreamSeed"
+    input  image: "vow:silence-while-i-talk — tension noted today around i497", last_seeded_at: "2026-05-08T03:00:03Z"
+    expect images_size: 1
+  end
+
+  test "Four PlantSeed dispatches accumulate four images" do
+    # Four-source coverage in a single test : the EnterSleep cascade
+    # fires PlantSeed once per source. Verify the singleton's images
+    # list grows to size 4 — the structural floor for "all four
+    # sources planted before REM begins".
+    tests "PlantSeed", on: "DreamSeed"
+    setup  "PlantSeed", image: "session:morning-coffee", last_seeded_at: "2026-05-08T03:00:00Z"
+    setup  "PlantSeed", image: "dream:la-vague",         last_seeded_at: "2026-05-08T03:00:01Z"
+    setup  "PlantSeed", image: "body:fatigue-high",      last_seeded_at: "2026-05-08T03:00:02Z"
+    input  image: "vow:silence-while-i-talk", last_seeded_at: "2026-05-08T03:00:03Z"
+    expect images_size: 4
+  end
+
+  # ── UNCOVERED — source-tag inspection (i517 runner extension) ────
+  #
+  # UNCOVERED : PlantSeed source-tag prefix — i517 proposed verb
+  #             `text_starts_with:` on a string field locks the
+  #             source-tagging convention ("session:", "dream:",
+  #             "body:", "vow:"). Today only round-trip equality is
+  #             expressible ; once the runner extension lands, the
+  #             prefix-only assertion can replace exact-string locks.
+  #
+  # ── UNCOVERED — runtime-driven seed gathering ───────────────────
+  #
+  # UNCOVERED : EnterSleep triggers all four PlantSeed dispatches in
+  #             one cascade. Today the SeedOnNightStart policy fires
+  #             SeedFromPreviousDreams (batch) ; the redesign adds a
+  #             per-source for_each sweep on each of the four sources.
+  #             The :cascade kind on a single command tests one chain ;
+  #             asserting "all four PlantSeed dispatches fired" needs
+  #             either the runner's emits_subset on the SleepEntered
+  #             cascade (today's surface, exercise this once the
+  #             redesign wires the policies) or i517's runtime-tap
+  #             verb. Covered in shell smoke today.
+  #
+  # UNCOVERED : per-source query availability — Vow.open_tensions,
+  #             DreamCorpus.recent_dreams (last N), BodyState.snapshot.
+  #             These first-class queries are the redesign's data
+  #             intake surface ; today only Musing.recent exists.
+  #             Filed as i517-source-queries follow-up.
 
 end

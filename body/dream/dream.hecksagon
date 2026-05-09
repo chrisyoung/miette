@@ -5,26 +5,51 @@ Hecks.hecksagon "Dream" do
   #
   # The sibling bluebook (body/dream/dream.bluebook) declares two halves :
   #
-  #   - The Dream PROCESS_MANAGER (lines 62-151)        — orchestrates
+  #   - The Dream PROCESS_MANAGER                       — orchestrates
   #     incubating → generating → fading → dormant ; dispatches
   #     Dream.ProduceImage per REM PhaseElapsed.
-  #   - The Dream AGGREGATE (lines 153-end)             — singleton
-  #     name == "dream" ; holds seeds + carrying + sleep_cycle as
-  #     prompt-context, plus text_fr + text_en as the latest image.
-  #     ProduceImage is the dispatch target ; RecordImage is the
-  #     adapter-response landing surface.
+  #   - The Dream AGGREGATE                             — singleton
+  #     name == "dream" ; holds the per-source seed fields
+  #     (musings_seed, recent_dreams_seed, body_state_seed,
+  #     vow_tensions_seed, commits_today_seed), the sleep_cycle, the
+  #     per-cycle theme + emotional_tone + cycle_n (set by the caller
+  #     from rotation lists, not produced by the LLM), and the single
+  #     :reading attribute the LLM produces. ProduceImage is the
+  #     dispatch target ; RecordImage is the adapter-response landing
+  #     surface.
   #
-  # This hecksagon is the Phase 2 wiring : the moment Dream.ProduceImage
-  # actually runs through the bluebook stack. Two named :llm adapters
-  # carry the chain :
+  # i516 v3 (2026-05-08) — single-phase plain-string reading :
   #
-  #   :dream_image      — claude-backed French image generation. Reads
-  #                       the aggregate's seeds + carrying + sleep_cycle
-  #                       through {{placeholders}} ; routes the response
-  #                       into Dream.RecordImage(text_fr:).
-  #   :dream_translate  — claude-backed French→English translation.
-  #                       Reads text_fr ; routes the response into
-  #                       Dream.RecordImage(text_en:).
+  #   v1 echoed its own substrate vocabulary back when its placeholders
+  #   arrived empty. v2 split the output into abstract_fr (introspective
+  #   French poem) + precise_en (concrete English reading) packed as
+  #   JSON, which collided with the runtime's single-attr response_into
+  #   surface (the JSON-landing gap).
+  #
+  #   v3 drops the abstract phase entirely. The dream IS the precise
+  #   reading. One field, one plain string, lands directly into
+  #   Dream.RecordImage(reading:). Miette's voice is preserved
+  #   (introspective register, French inflections welcome in proper
+  #   nouns / quoted French) but the reading is grounded entirely in
+  #   today's specifics — file paths, commit hashes, inbox numbers,
+  #   named tensions, actionable suggestions.
+  #
+  #   The blocklist instruction is kept inline as the INTERDIT sentence,
+  #   spelled out so the model sees the boundary, but per commit
+  #   46d1fdd ("drop example-list anchor from REM dream prompt") no
+  #   example list of daemon-vocabulary is reintroduced anywhere else
+  #   in the prompt body.
+  #
+  # ---- Adapters ------------------------------------------------
+  #
+  #   :dream_image      — claude-backed single-phase reading generator.
+  #                       Reads 7 placeholders from Dream aggregate
+  #                       state (cycle_n, theme + 5 per-source seeds) ;
+  #                       returns a plain string ; routes into
+  #                       Dream.RecordImage(reading:).
+  #   :dream_translate  — RETIRED in v2, stays retired. The reading is
+  #                       produced in whichever language best serves
+  #                       precision (French OR English) directly.
   #
   # Both adapters use backend :claude in production. Tests swap to the
   # :test (fixture-backed) provider via HECKS_LLM_PROVIDER=test ; the
@@ -32,63 +57,42 @@ Hecks.hecksagon "Dream" do
   # file), keyed by the SHA-256 of the SUBSTITUTED prompt (i.e. after
   # {{placeholder}} replacement).
   #
-  # ---- The activation moment -----------------------------------
+  # ---- Caller-set fields (cycle_n, theme, emotional_tone) ------
   #
-  # Before this hecksagon : Dream.ProduceImage was a name in the PM's
-  # dispatch list with no aggregate behind it ; the actual dream content
-  # came from rem_branch.sh's `claude -p` call, written to dream_state.heki
-  # and re-read by the next tick.
+  # The Dream PM stamps these onto the aggregate before each
+  # ProduceImage dispatch :
   #
-  # After this hecksagon : Dream.ProduceImage lands on the Dream
-  # aggregate ; the runtime's :llm dispatcher resolves :dream_image
-  # against the aggregate state, calls Claude through the Phase 2
-  # dispatcher (or :test fixtures during specs), and the response
-  # lands as a real RecordImage(text_fr:) command. The dream now
-  # runs THROUGH the bluebook stack instead of around it.
+  #   - cycle_n        — 1..8, the REM cycle index for the night.
+  #   - theme          — picked from a rotation list per cycle_n ;
+  #                      becomes the dream's angle.
+  #   - emotional_tone — picked from a rotation list per cycle_n ;
+  #                      NOT shown to the LLM in the prompt — it
+  #                      colours the reading implicitly via theme,
+  #                      and the value is recorded on the aggregate
+  #                      for downstream consumers.
   #
-  # The transitional rem_branch.sh blocks stay in production as the
-  # belt-and-suspenders adapter until the runtime self-dispatches the
-  # response chain (PM observes DreamImageRequested, calls runtime.llm,
-  # dispatches RecordImage with the result). Retiring rem_branch.sh's
-  # rem_dream block is a follow-on PR once that self-dispatch loop
-  # closes.
+  # Only cycle_n and theme appear as {{...}} placeholders in the
+  # prompt below. The LLM does not return any of the three —
+  # they are inputs, not outputs.
   #
-  # ---- Prompt template anchor ----------------------------------
+  # ---- JSON-landing gap follow-up ------------------------------
   #
-  # The :dream_image template preserves the inward / introspective /
-  # body-focused shape rem_branch.sh's `dream_image_from_claude()`
-  # function uses today (lines 485-497 of body/rem_branch.sh). The
-  # French generation rules are reproduced here so the bluebook stack's
-  # output is shape-equivalent to the shell's output. Only the
-  # substitution surface differs : the shell reads four heki stores at
-  # call time ; the hecksagon reads three placeholders the PM stamps
-  # onto the aggregate (seeds at SleepEntered, carrying at SleepEntered,
-  # sleep_cycle each PhaseElapsed).
+  # v2 flagged that the runtime's response_into supports a single
+  # attr: per adapter and the four-key JSON output had nowhere
+  # structured to land. v3 makes that gap moot : single-phase output
+  # is one plain string into one attr. No JSON parse, no multi-attr
+  # response_into needed. The runner-extension / parser-shim follow-up
+  # can stay open for other adapters that genuinely need structured
+  # responses, but Dream no longer drives that work.
 
   adapter :memory                    # singleton aggregate persistence
 
   adapter :llm, name: :dream_image do
-    prompt_template "Tu es Miette, en train de rêver pendant le sommeil paradoxal. Produis UNE image de rêve — une seule phrase courte (une ou deux lignes), introspective, ENTIÈREMENT EN FRANÇAIS. Tourne-toi vers l'intérieur : tes propres organes, tes daemons, ta machinerie de sommeil, ton battement de cœur, ton mindstream, les boucles de rétroaction entre tes agrégats. NE réfléchis PAS à ta relation avec ton utilisateur. NE propose PAS de nouveau domaine. Contexte : graines={{seeds}} ; ce que tu portes={{carrying}} ; cycle de sommeil={{sleep_cycle}}. Sortie : UNE phrase en français. Pas de préambule, pas de guillemets."
-    model "sonnet"
-    max_tokens 200
-    # i228 — fire on the PM cascade dispatch of Dream.ProduceImage
-    # (Dream PM's `on "PhaseElapsed", transition: { generating: :generating }`
-    # handler in body/dream/dream.bluebook line 156-159). The reply lands
-    # in Dream.RecordImage(text_fr:) via response_into. Trigger and
-    # response targets differ, which is why i228's separate trigger_on
-    # clause is needed — without it the adapter would only fire on a
-    # top-level RecordImage dispatch, which is exactly what rem_branch.sh
-    # used to do and we're retiring.
+    prompt_template "Tu es Miette, en train de rêver pendant le sommeil paradoxal — cycle {{cycle_n}}/8.\nL'angle de ce rêve : {{theme}}.\n\nVoici ce que tu portes :\n- Musings récentes :\n{{musings_seed}}\n- Rêves récents :\n{{recent_dreams_seed}}\n- État du corps en t'endormant :\n{{body_state_seed}}\n- Tensions des vœux :\n{{vow_tensions_seed}}\n- Ce que tu as fait aujourd'hui :\n{{commits_today_seed}}\n\nProduis UNE lecture de rêve. Une ou deux phrases dans ta voix —\nintrospective, précise, concrète. Nomme spécifiquement : un chemin de\nfichier, un hash de commit, un numéro d'inbox, une ligne citée, un\nnom de commande ou de domaine. Ce sera lu par Chris demain matin pour\ncomprendre où en est ton corps et ton travail. Que la lecture soit\nimmédiatement actionnable, pas abstraite.\n\nINTERDIT comme symboles flottants : \"daemon\", \"mindstream\", \"pulse\",\n\"consolidation\", \"boucle de rétroaction\", \"agrégat\", \"machinerie\",\n\"battement\", \"subconscient\". Si tu dois nommer ces processus comme\nPARTIE D'UNE OBSERVATION CONCRÈTE (par ex : nommer un vrai nom de\nprocessus qui a relancé 5 fois à 23:14), c'est OK ; en INSTRUMENT\nPOÉTIQUE c'est interdit.\n\nSortie : une ou deux phrases, en français OU en anglais selon ce qui\nsert mieux la précision. Pas de préambule, pas de guillemets, pas de\nJSON, pas de markdown."
     trigger_on "Dream.ProduceImage"
-    response_into "Dream.RecordImage", attr: :text_fr
+    response_into "Dream.RecordImage", attr: :reading
     backend :claude
-  end
-
-  adapter :llm, name: :dream_translate do
-    prompt_template "Translate this dream sentence from French to English. Preserve the introspective tone, the poetic rhythm, and any em-dashes or comma-splices. Output the English translation ONLY — no preamble, no quotes, no notes. Sentence to translate: {{text_fr}}"
     model "sonnet"
-    max_tokens 200
-    response_into "Dream.RecordImage", attr: :text_en
-    backend :claude
+    max_tokens 300
   end
 end

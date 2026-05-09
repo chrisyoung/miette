@@ -1,5 +1,5 @@
-Hecks.bluebook "WakeReview", version: "2026.04.26.1" do
-  vision "On wake, produce a single readable markdown — abstract dream imagery first, then a deep analysis of what we might improve — the wake-ritual artefact Chris reads first thing in the morning. One LLM call, declared as a bluebook command, never as imperative shell glue"
+Hecks.bluebook "WakeReview", version: "2026.05.08.2" do
+  vision "On wake, produce a single readable markdown — one section, the precise English reading that names today's specifics (file paths, commit hashes, inbox refs, named tensions) — the wake-ritual artefact Chris reads first thing in the morning. One LLM call, declared as a bluebook command, never as imperative shell glue"
   category "mind"
 
   # ============================================================
@@ -23,6 +23,35 @@ Hecks.bluebook "WakeReview", version: "2026.04.26.1" do
   # runtime's adapter_llm reads :input after dispatch and writes
   # :response ; LockReport copies :response → :report_markdown so a
   # subsequent ComposeWakeReview run on the same aggregate doesn't clobber it.
+  #
+  # ----- i516 v3 — single-section morning surface ---------------
+  #
+  # The morning report is now a SINGLE section : the reading IS the
+  # dream's surface in the morning. No abstract poem opener, no
+  # French verbatim trace — just the precise English reading.
+  #
+  #   Reading : 1–2 paragraph English synthesis across all 8 cycles'
+  #             :reading fields (cycle 8 weighted as the lucid
+  #             synthesis, the spine). Names today's specifics : file
+  #             paths, commit hashes, inbox numbers, named tensions.
+  #             Spot-on actionable. Miette's introspective register
+  #             fine, French inflections fine in proper nouns or
+  #             quoted French — but grounded entirely in today.
+  #
+  # Followed by two single-line trailers : `Recurring :` (symbols
+  # carried from previous nights, status: resolved | compounding) and
+  # `Tomorrow :` (one specific action — file path / inbox / commit-fix).
+  #
+  # Three input placeholders carry the v3 surface :
+  #
+  #   :all_cycles_readings     — newline-separated :reading fields, cycles 1–8
+  #   :recent_dreams_summary   — last week's recurring symbols (1–2 lines)
+  #   :tomorrow_seed           — the one-action seed extracted from cycle 8
+  #
+  # The legacy v1 placeholders (:dream_corpus, :consolidation,
+  # :dominant_tokens, :recurring_theme, :dreams_count) are retained
+  # for one cycle of back-compat — the wrapper still populates them
+  # until the new three-source plumbing lands first-class.
 
   aggregate "WakeReview", "One review per wake — composes the wake-ritual markdown via one LLM call" do
     identified_by :woke_at
@@ -40,6 +69,28 @@ Hecks.bluebook "WakeReview", version: "2026.04.26.1" do
     # what we might improve".
     attribute :consolidation,     String
 
+    # ---- i516 v3 — single-section morning surface inputs --------
+    # Stamped by the wrapper (or future :compute adapter
+    # wake_review_aggregate) at ComposeWakeReview dispatch time.
+    # Each may be empty — the prompt instructs the LLM to degrade
+    # gracefully (no fabricated refs) when seeds are short or absent.
+
+    # all_cycles_readings : newline-separated :reading fields from
+    # cycles 1–8 (typically chronological). The LLM synthesizes these
+    # into the precise English reading, weighting cycle 8 (the lucid
+    # synthesis) as the spine.
+    attribute :all_cycles_readings, String
+
+    # recent_dreams_summary : last week's recurring symbols, one line
+    # each, with status markers. Surfaced verbatim under "Recurring :"
+    # in the trailer. Empty string when no recurrence detected.
+    attribute :recent_dreams_summary, String
+
+    # tomorrow_seed : the single concrete action extracted from cycle 8
+    # (file path / inbox ref / commit-fix). Surfaced verbatim under
+    # "Tomorrow :" in the trailer.
+    attribute :tomorrow_seed, String
+
     # ---- LLM input/response convention --------------------------
     attribute :input,             String
     attribute :response,          String
@@ -56,7 +107,7 @@ Hecks.bluebook "WakeReview", version: "2026.04.26.1" do
 
     command "ComposeWakeReview" do
       role "System"
-      description "Write the wake-ritual prompt into :input. The prompt asks for EXACTLY two markdown sections in Miette's voice : ## Abstract dream imagery (raw images, no interpretation, French-inflected English, 2-4 sentences) followed by ## Deep analysis (what the night reveals about where we are off, where the next clarity lives, what to change about the body or the repo ; philosophical, not a ticket list, a reading). No greeting. No closing remarks. Output the markdown only. The hecksagon's :llm adapter (backend: claude) reads :input after dispatch and writes the rendered markdown to :response."
+      description "Write the wake-ritual prompt into :input. i516 v3 — the prompt asks for ONE section : the precise English reading (1-2 paragraphs) that synthesizes across all 8 cycles' :reading fields and names today's specifics (file paths, commit hashes, inbox numbers, named tensions ; spot-on actionable). The report closes with two single-line trailers : 'Recurring :' (recent_dreams_summary verbatim) and 'Tomorrow :' (tomorrow_seed verbatim). The legacy v1 placeholders (dream_corpus, consolidation, dominant_tokens, recurring_theme, dreams_count) are still accepted as inputs for back-compat ; the new three-source bundle (all_cycles_readings, recent_dreams_summary, tomorrow_seed) carries the v3 surface. The hecksagon's :llm adapter (backend: claude) reads :input after dispatch and writes the rendered markdown to :response."
       attribute :woke_at,           String
       attribute :sleep_entered_at,  String
       attribute :dreams_count,      Integer
@@ -64,6 +115,9 @@ Hecks.bluebook "WakeReview", version: "2026.04.26.1" do
       attribute :dominant_tokens,   String
       attribute :dream_corpus,      String
       attribute :consolidation,     String
+      attribute :all_cycles_readings,   String
+      attribute :recent_dreams_summary, String
+      attribute :tomorrow_seed,         String
       attribute :input,             String
       then_set :woke_at,            to: :woke_at
       then_set :sleep_entered_at,   to: :sleep_entered_at
@@ -72,6 +126,9 @@ Hecks.bluebook "WakeReview", version: "2026.04.26.1" do
       then_set :dominant_tokens,    to: :dominant_tokens
       then_set :dream_corpus,       to: :dream_corpus
       then_set :consolidation,      to: :consolidation
+      then_set :all_cycles_readings,    to: :all_cycles_readings
+      then_set :recent_dreams_summary,  to: :recent_dreams_summary
+      then_set :tomorrow_seed,          to: :tomorrow_seed
       then_set :input,              to: :input
       then_set :phase,              to: "composing"
       emits "WakeReviewComposed"

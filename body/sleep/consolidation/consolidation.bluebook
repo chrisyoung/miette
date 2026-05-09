@@ -170,12 +170,16 @@ Hecks.bluebook "Consolidation", version: "2026.05.02.1" do
     # { ... }` carries. Keeping it on one line means the parser sees
     # the whole statement at once.
 
+    # i516 — Consciousness.DreamPulse retired from the NREM sweep ;
+    # the REM cascade (Dream.RecordImage → DreamImageRecorded →
+    # DreamPulseFromImage policy in dream.bluebook) now owns the
+    # statusline's :impression update. Leaving the four data sweeps
+    # in place ; they are the consolidation pass's actual work.
     on "PhaseElapsed", transition: { light: :light } do
       dispatch "Store.PromoteSignal", for_each: { from: "Signal.cold" }, with: { kind: from_iter(:kind), payload: from_iter(:payload), created_at: from_iter(:created_at) }
       dispatch "Signal.ArchiveSignal", for_each: { from: "Signal.cold" }, with: { id: from_iter(:id) }
       dispatch "Synapse.Compost", for_each: { from: "Synapse.cold" }, with: { id: from_iter(:id) }
       dispatch "Remains.RecordRemains", for_each: { from: "Synapse.cold" }, with: { from_synapse: from_iter(:from), strength_at_death: from_iter(:strength), firings: from_iter(:firings), died_at: from_iter(:last_fired_at) }
-      dispatch "Consciousness.DreamPulse"
     end
 
     on "PhaseElapsed", transition: { deep: :deep } do
@@ -183,7 +187,6 @@ Hecks.bluebook "Consolidation", version: "2026.05.02.1" do
       dispatch "Signal.ArchiveSignal", for_each: { from: "Signal.cold" }, with: { id: from_iter(:id) }
       dispatch "Synapse.Compost", for_each: { from: "Synapse.cold" }, with: { id: from_iter(:id) }
       dispatch "Remains.RecordRemains", for_each: { from: "Synapse.cold" }, with: { from_synapse: from_iter(:from), strength_at_death: from_iter(:strength), firings: from_iter(:firings), died_at: from_iter(:last_fired_at) }
-      dispatch "Consciousness.DreamPulse"
     end
 
     on "PhaseElapsed", transition: { final_light: :final_light } do
@@ -191,7 +194,6 @@ Hecks.bluebook "Consolidation", version: "2026.05.02.1" do
       dispatch "Signal.ArchiveSignal", for_each: { from: "Signal.cold" }, with: { id: from_iter(:id) }
       dispatch "Synapse.Compost", for_each: { from: "Synapse.cold" }, with: { id: from_iter(:id) }
       dispatch "Remains.RecordRemains", for_each: { from: "Synapse.cold" }, with: { from_synapse: from_iter(:from), strength_at_death: from_iter(:strength), firings: from_iter(:firings), died_at: from_iter(:last_fired_at) }
-      dispatch "Consciousness.DreamPulse"
     end
 
     # ----- REM no-op self-loop -------------------------------------

@@ -1,0 +1,90 @@
+Hecks.behaviors "BodySleep" do
+  vision "Behavioral parallel of the SleepCycle process_manager redesign (i516). The PM correlates by Body's :name singleton, opens on SleepEntered, closes on DreamStudyPublished, and walks 8 cycles through light → rem → deep → final_light → studying_dream → done. The redesign tightens cycle integrity : phases advance content-gated (not time-floored) ; lucid REM is exactly cycle 8 and only cycle 8 ; dream_pulses don't overshoot dream_pulses_needed ; wake fires after final_light ; phases never stall."
+
+  # ── Per-command Consciousness coverage lives in sleep/consciousness.behaviors ─
+  # The phase-advancement commands (AdvanceLightToRem,
+  # AdvanceLightToLucidRem, AdvanceRemToDeep, AdvanceDeepToLight,
+  # AdvanceDeepToFinalLight, CompleteFinalLight) are commands on the
+  # Consciousness aggregate. The behaviors runner auto-discovers the
+  # source bluebook by filename, and from this file that resolves to
+  # sleep_cycle.bluebook (the SleepCycle process_manager) — which does
+  # not define those commands. The aggregate-level locks belong in
+  # sibling consciousness.behaviors ; from here we cover the PM-driven
+  # cross_cascade shape only.
+
+  # ── i516 redesign — cycle-integrity cross-cascade ───────────────
+  #
+  # The PM transitions the SleepCycle correlation through 6 states.
+  # Each PhaseElapsed advances exactly one phase ; the PM never
+  # double-dispatches and never stalls. The redesign tightens this :
+  #
+  #   - dream_pulses must reach dream_pulses_needed before REM
+  #     advances to deep (no overshoot — the cap-given gate fires
+  #     AdvanceRemToDeepCap at exactly the right tick).
+  #   - lucid REM is gated by sleep_cycle == sleep_total, so the
+  #     PM's dual-dispatch (regular + lucid) lands the lucid branch
+  #     on cycle 8 and the regular branch on cycles 1..7.
+  #   - final_light advances to studying_dream via WokenUp ;
+  #     studying_dream advances to done via DreamStudyPublished.
+
+  test "SleepEntered cascades through PM open" do
+    tests "EnterSleep", on: "Consciousness", kind: :cross_cascade
+    setup  "EnterDaydream"
+    expect emits_subset: ["SleepEntered"]
+  end
+
+  test "WokenUp cascades through wake review composer" do
+    # The redesign's wake review chain : WokenUp → GatherDreamCorpus
+    # → DreamCorpusGathered → InterpretDream → DreamInterpreted →
+    # ExtractTheme → ThemeExtracted → ProposeDomainFromDream. The PM
+    # additionally dispatches WakeReport.Compose on the final_light
+    # transition ; the redesign also inserts DreamInterpretation.Compose
+    # (the two-phase wake review composer — see dream_interpretation.behaviors).
+    tests "WakeUp", on: "Consciousness", kind: :cross_cascade
+    setup  "EnterDaydream"
+    setup  "EnterSleep"
+    expect emits_subset: ["WokenUp"]
+  end
+
+  # ── UNCOVERED — multi-cycle integrity (i517 runner extensions) ──
+  #
+  # UNCOVERED : eight-cycle RemEntered count — i517 proposed `:loop`
+  #             kind drives a PM through N cycles and asserts on the
+  #             cumulative event log (e.g. 7 RemEntered + 1
+  #             LucidRemEntered + 8 DeepEntered across 8 cycles).
+  #             Today's runner is single-dispatch ; SHELL SMOKE
+  #             covers the 8-cycle run.
+  #
+  # UNCOVERED : dream_pulses do not overshoot dream_pulses_needed —
+  #             i517 proposed `expect_attribute_lte:` verb for
+  #             multi-tick monotonic bounds. The PM caps via the
+  #             AdvanceRemToDeepCap given gate ; today's runner only
+  #             asserts equality after one command. SHELL SMOKE
+  #             covers the cap end-to-end.
+  #
+  # ── UNCOVERED — runtime-level cycle integrity ──────────────────
+  #
+  # UNCOVERED : phases never stall — every PhaseElapsed transition
+  #             must produce ONE next-phase command (or a wake fire
+  #             at cycle 8 final_light). A stalled phase would mean
+  #             a tick where neither given matched. Today's behaviors
+  #             runner observes one command at a time ; "every tick
+  #             produces progress" is a multi-tick property.
+  #             SHELL SMOKE drives this.
+  #
+  # UNCOVERED : ends_on archives the PM cleanly — DreamStudyPublished
+  #             closes the SleepCycle correlation. The runner today
+  #             tests command effects on aggregate state ; PM
+  #             archival is a runtime-state property the .heki
+  #             surface reads. SHELL SMOKE asserts the PM heki has
+  #             one done-state record at end of 8 cycles.
+  #
+  # UNCOVERED : DreamProduced events count exactly N times — each
+  #             REM tick the Dream PM emits one DreamProduced ;
+  #             SleepCycle PM's `on "DreamProduced"` self-loop
+  #             dispatches Body.RecordDreamPulse. Across 8 cycles
+  #             the cumulative DreamProduced count equals
+  #             8 * dream_pulses_needed (40, with default cap 5).
+  #             SHELL SMOKE counts dream_state.heki rows.
+
+end

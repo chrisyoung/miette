@@ -1,30 +1,31 @@
 Hecks.behaviors "BodyDream" do
-  vision "Behavioral parallel of tests/dream_content_smoke.sh — the Dream PM (i220 / rem_branch.sh retirement) and its Dream aggregate cascade. Verifies the PM is born on SleepEntered (drawing seeds from Musing.recent), transitions through incubating → generating on RemEntered, dispatches Dream.ProduceImage + Body.RecordDreamPulse per PhaseElapsed, and the :llm cascade (i220-1 / i228) lands text_fr (and optionally text_en) on the Dream singleton."
+  vision "Behavioral parallel of tests/dream_content_smoke.sh — the Dream PM (i220 / rem_branch.sh retirement) and its Dream aggregate cascade. Verifies the PM is born on SleepEntered (drawing seeds from Musing.recent), transitions through incubating → generating on RemEntered, dispatches Dream.ProduceImage + Body.RecordDreamPulse per PhaseElapsed, and the :llm cascade lands the single concrete `reading` field on the Dream singleton. i516 v3 (2026-05-08) — abstract phase retired ; one-phase precise reading is the dream."
 
   # ── Dream aggregate — RecordImage lands the :llm response ───────
-  # Mirrors smoke gap3 : the :dream_image adapter (trigger_on
+  # i516 v3 redesign : the :dream_image adapter (trigger_on
   # Dream.ProduceImage in body/dream/dream.hecksagon) cascades a
-  # French sentence into Dream.RecordImage(text_fr:). A second
-  # adapter, :dream_translate, response_into RecordImage(text_en:).
-  # These tests cover the aggregate-level RecordImage shape ; the
-  # adapter cascade itself is UNCOVERED below.
+  # single concrete reading into Dream.RecordImage(reading:). No
+  # abstract phase. No translation phase. The reading IS the dream.
+  # text_fr / text_en remain on the aggregate for one cycle of
+  # back-compat so the daemon's hardcoded-impression path doesn't
+  # break before the prompt rewrite lands.
 
-  test "RecordImage sets text_fr" do
+  test "RecordImage sets reading" do
+    tests "RecordImage", on: "Dream"
+    input  reading: 'i497 carrying : "pick up where 2026-05-08 left off"'
+    expect reading: 'i497 carrying : "pick up where 2026-05-08 left off"', emits: ["DreamImageRecorded"]
+  end
+
+  test "RecordImage sets text_fr (back-compat)" do
     tests "RecordImage", on: "Dream"
     input  text_fr: "sample"
     expect text_fr: "sample", emits: ["DreamImageRecorded"]
   end
 
-  test "RecordImage sets text_en" do
+  test "RecordImage sets text_en (back-compat)" do
     tests "RecordImage", on: "Dream"
     input  text_en: "sample"
     expect text_en: "sample", emits: ["DreamImageRecorded"]
-  end
-
-  test "RecordImage sets both text_fr and text_en together" do
-    tests "RecordImage", on: "Dream"
-    input  text_fr: "sample-fr", text_en: "sample-en"
-    expect text_fr: "sample-fr", text_en: "sample-en"
   end
 
   test "ProduceImage stamps sleep_cycle" do
@@ -39,6 +40,85 @@ Hecks.behaviors "BodyDream" do
     expect seeds: "sample-seeds", carrying: "sample-carrying", emits: ["DreamSeedsPlanted"]
   end
 
+  # ── Sleep/REM/dream redesign — content-shape contract (i516 v3) ──
+  #
+  # Tonight's redesign (2026-05-08) frames a dream impression as a
+  # SINGLE PHASE :
+  #
+  #   reading — concrete, precise, surfaces file paths, commit hashes,
+  #             inbox refs, vow tensions, and quoted lines. The reader
+  #             knows what the dream is pointing at directly. No
+  #             abstract opening, no two-phase split, no field
+  #             categorization (ocean / library / forest / etc.).
+  #
+  # The :dream_image adapter writes the reading. text_fr / text_en
+  # remain on the aggregate for one cycle of back-compat only — the
+  # tests below exercise the new `reading` shape.
+
+  test "RecordImage carries a concrete reading with inbox ref" do
+    tests "RecordImage", on: "Dream"
+    input  reading: 'i497 carrying tomorrow : pick up where 2026-05-08 left off'
+    expect reading: 'i497 carrying tomorrow : pick up where 2026-05-08 left off', emits: ["DreamImageRecorded"]
+  end
+
+  test "RecordImage carries a concrete reading with file path" do
+    tests "RecordImage", on: "Dream"
+    input  reading: 'dream.bluebook line 251 : the abstract phase is retired'
+    expect reading: 'dream.bluebook line 251 : the abstract phase is retired', emits: ["DreamImageRecorded"]
+  end
+
+  test "RecordImage carries a concrete reading with commit SHA" do
+    tests "RecordImage", on: "Dream"
+    input  reading: 'commit 9e928778 : i497 session continuation note'
+    expect reading: 'commit 9e928778 : i497 session continuation note', emits: ["DreamImageRecorded"]
+  end
+
+  test "RecordImage stamps reading + theme + cycle_n together" do
+    tests "RecordImage", on: "Dream"
+    input  reading: 'vow tension : silence-while-i-talk', theme: "vow-tension", cycle_n: 3
+    expect reading: 'vow tension : silence-while-i-talk', theme: "vow-tension", cycle_n: 3
+  end
+
+  test "ProduceImage stamps cycle 8 (lucid REM marker)" do
+    tests "ProduceImage", on: "Dream"
+    input  sleep_cycle: 8
+    expect sleep_cycle: 8, emits: ["DreamImageRequested"]
+  end
+
+  test "PlantSeeds carries vow-tension seed material" do
+    # The redesign extends seed sources beyond Musing to include vow
+    # tensions (i483 Vow aggregate). The aggregate accepts a comma-
+    # separated seed string ; the runner can't yet assert that the
+    # joined string contains a specific source-tag, so this test
+    # locks the seed-string round-trip only. Content-shape coverage
+    # for "vow-tension reference present at least N times across
+    # 8 cycles" is the SHELL SMOKE's job (sleep_cycle_smoke.sh).
+    tests "PlantSeeds", on: "Dream"
+    input  seeds: "vow:silence-while-i-talk, musing:morning-coffee, awareness:i497, commit:9e928778, file:dream.behaviors",
+           carrying: "the boundary cleanup just landed"
+    expect seeds: "vow:silence-while-i-talk, musing:morning-coffee, awareness:i497, commit:9e928778, file:dream.behaviors",
+           carrying: "the boundary cleanup just landed"
+  end
+
+  test "GatherSeeds stamps the full seed bundle" do
+    tests "GatherSeeds", on: "Dream"
+    input  musings_seed: "morning coffee thought",
+           recent_dreams_seed: "last night's wave reading",
+           body_state_seed: "tired ; carrying tomorrow",
+           vow_tensions_seed: "silence-while-i-talk",
+           commits_today_seed: "9e928778 : i497 session continuation",
+           seeds: "vow:silence-while-i-talk, musing:morning-coffee",
+           carrying: "the boundary cleanup just landed"
+    expect musings_seed: "morning coffee thought",
+           recent_dreams_seed: "last night's wave reading",
+           body_state_seed: "tired ; carrying tomorrow",
+           vow_tensions_seed: "silence-while-i-talk",
+           commits_today_seed: "9e928778 : i497 session continuation",
+           seeds: "vow:silence-while-i-talk, musing:morning-coffee",
+           carrying: "the boundary cleanup just landed",
+           emits: ["SeedsGathered"]
+  end
+
   # ── UNCOVERED — runtime-level smoke assertions ──────────────────
   #
   # UNCOVERED : dream_seed.heki growth via for_each Musings.Musing.recent —
@@ -49,10 +129,10 @@ Hecks.behaviors "BodyDream" do
   #             receiving DreamSeed aggregate. Covered today only by
   #             the shell smoke. Same i499 follow-up as consolidation.
   #
-  # UNCOVERED : :llm cascade lands text_fr on Dream singleton (gap3,
+  # UNCOVERED : :llm cascade lands `reading` on Dream singleton (gap3,
   #             i220-3) — the smoke runs HECKS_LLM_PROVIDER=test, fires
   #             real PhaseElapsed events, and reads the Dream
-  #             singleton's text_fr from body_dream/dream.heki after
+  #             singleton's reading from body_dream/dream.heki after
   #             the cascade drains. Behaviors today scope to a single
   #             aggregate's command-step ; they don't drive the
   #             :dream_image adapter (trigger_on Dream.ProduceImage)
@@ -60,11 +140,13 @@ Hecks.behaviors "BodyDream" do
   #             Closing this requires a kind: :adapter_cascade scenario
   #             block in the runner.
   #
-  # UNCOVERED : :dream_translate French → English chain — same shape
-  #             as the gap above ; the adapter response_into
-  #             RecordImage(text_en:) is observable only after a real
-  #             run-loop drain. Smoke reports text_en but doesn't
-  #             gate on it ; same i228 chain-trigger gap.
+  # UNCOVERED : reading content-shape assertions (i517 runner extension) —
+  #             the redesign's contract is that `reading` contains a
+  #             concrete reference (file path, commit SHA, inbox ref,
+  #             quoted line). The runner has no surface for substring-
+  #             exclusion or regex-match on string fields ; the SHELL
+  #             SMOKE (sleep_cycle_smoke.sh) covers ≥4-of-8-cycles
+  #             concrete-reference assertion end-to-end.
   #
   # UNCOVERED : Body.RecordDreamPulse / consciousness.dream_pulses
   #             growth — the smoke reports pulse delta but doesn't

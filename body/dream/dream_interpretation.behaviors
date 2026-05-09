@@ -1,0 +1,86 @@
+Hecks.behaviors "DreamInterpretation" do
+  vision "Behavioral parallel of the wake-review composer (i516 v3 redesign — abstract phase retired). The composer surfaces a single concrete `reading` per impression — the precise reading that names files, commits, inbox refs, quoted lines. Today's DreamInterpretation aggregate has the LLM-driven Narrate→LockNarrative chain ; the redesign extends it with a Compose command that builds the wake review from the readings."
+
+  # ── DreamInterpretation aggregate — existing surface ───────────
+  # Lock the existing per-command behavior (mirrors interpretation.behaviors
+  # patterns ; this file is the dream_interpretation source-of-truth
+  # behaviors per i515). Keep these runnable to anchor regressions.
+
+  test "GatherDreamCorpus mints the singleton" do
+    tests "GatherDreamCorpus", on: "DreamInterpretation"
+    input  name: "dream_interpretation"
+    expect name: "dream_interpretation", emits: ["DreamCorpusGathered"]
+  end
+
+  test "InterpretDream sets dream_images + strongest_synapse" do
+    tests "InterpretDream", on: "DreamInterpretation"
+    input  dream_images: "sample-images", strongest_synapse: "sample-synapse"
+    expect dream_images: "sample-images", strongest_synapse: "sample-synapse", emits: ["DreamInterpreted"]
+  end
+
+  test "ExtractTheme sets recurring_theme" do
+    tests "ExtractTheme", on: "DreamInterpretation"
+    setup  "InterpretDream", dream_images: "sample-images", strongest_synapse: "sample-synapse"
+    input  recurring_theme: "boundary-and-cleanup"
+    expect recurring_theme: "boundary-and-cleanup", emits: ["ThemeExtracted"]
+  end
+
+  test "Narrate stores prompt into input" do
+    tests "Narrate", on: "DreamInterpretation"
+    setup  "InterpretDream", dream_images: "sample-images", strongest_synapse: "sample-synapse"
+    input  input: "compose a French paragraph reading the night's images"
+    expect input: "compose a French paragraph reading the night's images", emits: ["NarrativeRequested"]
+  end
+
+  test "LockNarrative captures response into narrative" do
+    tests "LockNarrative", on: "DreamInterpretation"
+    setup  "InterpretDream", dream_images: "sample-images", strongest_synapse: "sample-synapse"
+    input  response: "la nuit a pesé sur le bord du monde"
+    expect narrative: "la nuit a pesé sur le bord du monde", emits: ["NarrativeLocked"]
+  end
+
+  # ── UNCOVERED — Compose command (i516 v3 redesign) ──────────────
+  #
+  # The redesign adds a `Compose` command on DreamInterpretation that
+  # produces a wake review from the night's readings. Single field :
+  #
+  #   reading — the concrete reading that names the specific files /
+  #             commits / inbox refs / quoted lines the night was
+  #             carrying. No abstract phase, no two-phase split. The
+  #             reader knows what the dream is pointing at directly.
+  #
+  # The bluebook does not yet define Compose ; once it lands (with the
+  # `reading` attribute and a WakeReviewComposed event), the per-command
+  # behavior tests can be added here. Until then SHELL SMOKE
+  # (sleep_cycle_smoke.sh) covers the wake-review file's reading body
+  # plus the Recurring / Tomorrow trailer end-to-end.
+  #
+  # ── UNCOVERED — file-output assertions ──────────────────────────
+  #
+  # UNCOVERED : `/tmp/wake_review_latest.md` contains a non-empty
+  #             reading body plus a `Recurring :` and `Tomorrow :`
+  #             trailer. The behaviors runner can't observe filesystem
+  #             outputs ; that's the SHELL SMOKE's job
+  #             (sleep_cycle_smoke.sh greps the file for both trailers
+  #             plus a non-empty body).
+  #
+  # UNCOVERED : end-to-end wake cascade — WokenUp → GatherDreamCorpus
+  #             → InterpretDream → ExtractTheme → Synthesize →
+  #             Narrate → LockNarrative → Compose → WakeReviewComposed.
+  #             The :cross_cascade kind tests a chain from one
+  #             aggregate's command ; the full wake chain spans the
+  #             :compute adapter (tokenize_dream_corpus) plus the
+  #             :llm adapter (Narrate). Cross-adapter cascades need
+  #             i220-3's FixtureLlmAdapter wiring + i517's runner
+  #             chain support. Covered in shell smoke today.
+  #
+  # UNCOVERED : reading content-shape assertions (i517 runner extension) —
+  #             the redesign's contract is that `reading` contains a
+  #             concrete reference (file path, commit SHA, inbox ref,
+  #             quoted line). The runner has no surface for substring-
+  #             exclusion or regex-match on string fields ; the SHELL
+  #             SMOKE (sleep_cycle_smoke.sh) covers both the no-daemon
+  #             rule on `reading` and the ≥4-of-8-cycles concrete-
+  #             reference assertion end-to-end.
+
+end

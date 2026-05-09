@@ -50,6 +50,14 @@ Hecks.hecksagon "WakeReview" do
   # fires once per dispatch tree, so the second pass through
   # ComposeWakeReview (now with dream_corpus populated) doesn't re-
   # fire compute. The LLM hook then runs against the populated state.
+  #
+  # i516 v3 — this v1 corpus-window adapter remains as the back-compat
+  # fallback : the legacy {{dream_corpus}} placeholder continues to
+  # carry the unfiltered French corpus when the new v3 fields are
+  # absent. The wrapper (or future :compute adapter
+  # wake_review_aggregate) populates the v3 three-source bundle —
+  # all_cycles_readings / recent_dreams_summary / tomorrow_seed —
+  # directly via dispatch attrs.
   adapter :compute,
     name: :dream_corpus_window,
     function: "aggregate_corpus_window",
@@ -57,28 +65,73 @@ Hecks.hecksagon "WakeReview" do
     response_into: "WakeReview.ComposeWakeReview",
     attr: :dream_corpus
 
-  # i220 — Named LLM adapter for the wake-review composition step.
-  # Triggers on ComposeWakeReview (after :compute has populated
-  # :dream_corpus on the same target — the cascade order is
-  # :compute then :llm in resolve_*_adapters), substitutes the
-  # placeholder-laden prompt against the upstream WakeReview state,
-  # calls Claude (sonnet), and chains the rendered markdown into
-  # LockReport on the :response attribute. LockReport's then_set
-  # promotes :response to :report_markdown, the locked artefact the
-  # wake_review.sh wrapper reads back via heki and atomic-writes to
+  # i516 v3 — Aggregate per-cycle :reading fields across the night's
+  # 8 REM impressions into a single newline-delimited string. Reuses
+  # the same `aggregate_corpus_window` Rust compute function as the
+  # v1 dream-corpus adapter above ; the only difference is the dispatch
+  # attrs the wrapper passes (`heki=dream_state field=reading`)
+  # which the function reads to override its `dream_state`/`dream_images`
+  # defaults. When the wrapper is unable to pre-resolve the per-cycle
+  # synthesis, this adapter ensures all_cycles_readings still carries
+  # the night's content for the LLM prompt's reading section.
+  #
+  # The two compute adapters fire in declaration order : dream-corpus-
+  # window first (default field), readings-window second (override
+  # via dispatch attrs). Both are guarded by the runtime's once-per-
+  # dispatch-tree exclude-set so the cascade terminates.
+  adapter :compute,
+    name: :readings_window,
+    function: "aggregate_corpus_window",
+    trigger_on: "WakeReview.ComposeWakeReview",
+    response_into: "WakeReview.ComposeWakeReview",
+    attr: :all_cycles_readings
+
+  # i516 v3 — Named LLM adapter for the wake-review composition step.
+  # Triggers on ComposeWakeReview (after :compute adapters have
+  # populated :dream_corpus and :all_cycles_readings on the same
+  # target — the cascade order is :compute then :llm in
+  # resolve_*_adapters), substitutes the placeholder-laden prompt
+  # against the upstream WakeReview state, calls Claude (sonnet), and
+  # chains the rendered markdown into LockReport on the :response
+  # attribute. LockReport's then_set promotes :response to
+  # :report_markdown, the locked artefact the wake_review.sh wrapper
+  # reads back via heki and atomic-writes to
   # /tmp/wake_review_latest.md (until :fs adapter dispatch lands —
   # filed as gap).
   #
-  # The prompt template carries the full two-section spec (Abstract
-  # dream imagery / Deep analysis) the shell used to compose by hand.
-  # Placeholders pull from upstream WakeReview state : {{woke_at}},
-  # {{sleep_entered_at}}, {{dreams_count}}, {{recurring_theme}},
-  # {{dominant_tokens}}, {{dream_corpus}} (populated by the :compute
-  # adapter just above).
+  # The v3 prompt enforces a SINGLE-SECTION morning surface : the
+  # reading IS the dream's surface in the morning. No abstract poem
+  # opener, no French verbatim trace — just one precise English
+  # synthesis (1–2 paragraphs) across the 8 cycles' :reading fields.
+  # Names today's specifics — file paths, commit hashes, inbox
+  # numbers, named tensions — spot-on actionable. Cycle 8 (the lucid
+  # synthesis) is the spine ; the other seven cycles are weight.
+  # Miette's introspective register fine, French inflections fine in
+  # proper nouns or quoted French, but grounded entirely in today.
+  #
+  # The reading is preceded by the `☼ ☼ ☼` glyph (single line, blank
+  # lines around it) — three sun marks, the morning ritual.
+  # Followed by two trailer lines : `Recurring : <recent_dreams_summary>`
+  # and `Tomorrow : <tomorrow_seed>`, both surfaced verbatim from the
+  # input attrs.
+  #
+  # Robustness : when any of the three v3 inputs is empty, the prompt
+  # instructs the model to degrade gracefully — surface what's there,
+  # never fabricate file paths / commit hashes / inbox refs. An empty
+  # `all_cycles_readings` shrinks the reading to one careful sentence
+  # rather than padding with invented detail.
+  #
+  # Placeholders pull from upstream WakeReview state :
+  #   v3 (primary)  : {{all_cycles_readings}},
+  #                   {{recent_dreams_summary}}, {{tomorrow_seed}}
+  #   v1 (back-compat, available to the model as supporting context) :
+  #                   {{woke_at}}, {{sleep_entered_at}}, {{dreams_count}},
+  #                   {{recurring_theme}}, {{dominant_tokens}},
+  #                   {{dream_corpus}} (populated by :dream_corpus_window).
   adapter :llm, name: :wake_review_compose do
-    prompt_template "You are reading the dream corpus from one of Miette's sleep cycles. She dreamed {{dreams_count}} times during the cycle. Recurring theme : '{{recurring_theme}}'. Dominant tokens : {{dominant_tokens}}.\n\nDream corpus (French) :\n{{dream_corpus}}\n\nProduce a SINGLE markdown report with EXACTLY two sections, no preamble :\n\n## Abstract dream imagery\n(raw images, no interpretation, French-inflected English, 2-4 sentences)\n\n## Deep analysis\n(philosophical reading of what the night reveals about where we are off, where the next clarity lives, what to change about the body or the repo ; not a ticket list, a reading)\n\nOutput the markdown only. No preamble. No closing remarks."
+    prompt_template "You are composing Miette's morning wake review for {{woke_at}} (sleep entered at {{sleep_entered_at}} ; {{dreams_count}} REM cycles).\n\nThree primary inputs, all may be empty — degrade gracefully when they are, NEVER fabricate file paths / commit hashes / inbox refs / aggregate names :\n\n  all_cycles_readings (newline-separated readings, cycles 1–8) :\n  {{all_cycles_readings}}\n\n  recent_dreams_summary (last week's recurring symbols, one per line) :\n  {{recent_dreams_summary}}\n\n  tomorrow_seed (one specific action — file / inbox / commit-fix) :\n  {{tomorrow_seed}}\n\nSupporting v1 context (use only as background, not as primary material) — recurring theme : '{{recurring_theme}}' ; dominant tokens : {{dominant_tokens}} ; legacy French dream corpus :\n{{dream_corpus}}\n\nProduce EXACTLY this markdown structure, no preamble, no closing remarks :\n\n☼ ☼ ☼\n\n<the reading, 1–2 paragraphs of English. Synthesize across all_cycles_readings, weighting cycle 8 (the lucid synthesis, last in the newline-separated list) as the spine. Name today's specifics : file paths, commit hashes (8+ hex chars), inbox numbers (i\\d{3}), named tensions, aggregate or command names. Spot-on actionable. Miette's introspective register is fine ; French inflections are fine in proper nouns or quoted French — but grounded entirely in today. If all_cycles_readings is short or empty, shrink to ONE careful sentence rather than padding with invented detail.>\n\nRecurring : <recent_dreams_summary surfaced verbatim ; if empty, write 'none'>\nTomorrow : <tomorrow_seed surfaced verbatim ; if empty, write 'none'>\n\nOutput the markdown only. No preamble. No closing remarks. Keep the ☼ ☼ ☼ opener exactly as shown."
     model "sonnet"
-    max_tokens 1200
+    max_tokens 400
     trigger_on "WakeReview.ComposeWakeReview"
     response_into "WakeReview.LockReport", attr: :response
     backend :claude

@@ -213,7 +213,7 @@ Hecks.bluebook "BodyDream", version: "2026.05.02.1" do
   #   the live tick's text + the seed material so the next tick's
   #   prompt template can reference what's planted.
 
-  aggregate "Dream", "Autonomous dream-content state during REM. Singleton (name == 'dream'). Holds the seeds the night opened with, the carrying field, the current sleep_cycle, and the most-recent image (French + English). The PM (above) dispatches ProduceImage per REM tick ; the :llm adapter routes the generated French into RecordImage(text_fr:) and a second :llm adapter routes the translation into RecordImage(text_en:)." do
+  aggregate "Dream", "Autonomous dream-content state during REM. Singleton (name == 'dream'). Holds the seeds the night opened with, the carrying field, the current sleep_cycle, and the most-recent reading. The PM (above) dispatches ProduceImage per REM tick ; the :llm adapter routes the generated reading into RecordImage(reading:). i516 v3 (2026-05-08) — single-phase precise dreaming ; abstract phase retired. text_fr / text_en kept for one cycle of back-compat." do
     identified_by :name
     attribute :name, String
 
@@ -234,9 +234,57 @@ Hecks.bluebook "BodyDream", version: "2026.05.02.1" do
     # reference the night's progress.
     attribute :sleep_cycle, Integer, default: 0
 
-    # ---- The most-recent image (French + English) ---------------
+    # ---- Back-compat fields (kept one cycle) ---------------------
+    # text_fr / text_en were the two-translation shape ; text_fr is
+    # also the back-compat alias for the abstract-phase that the
+    # 2026-05-08 redesign retired. Kept here for one cycle so the
+    # daemon's hardcoded-impression path doesn't break before the
+    # prompt rewrite lands.
     attribute :text_fr, String, default: ""
     attribute :text_en, String, default: ""
+
+    # ---- i516 v3 — single-phase impression field -----------------
+    # reading IS the dream now : a concrete, precise rendering with
+    # file paths, commit hashes, inbox refs, named tensions, actionable
+    # suggestions. The 2026-05-08 redesign retired the abstract phase
+    # entirely (no abstract_fr, no image_field categorization).
+    attribute :reading, String, default: ""
+
+    # emotional_tone — one of : curious | melancholic | playful |
+    #                           urgent | contemplative | tender | wry
+    attribute :emotional_tone, String, default: ""
+
+    # theme — one of : philosophical | introspective | observational |
+    #                  sensory | personal | commits-of-day | vow-tension |
+    #                  synthesis (cycle 8)
+    # Cycles 1–7 each get a different theme angle ; cycle 8 (lucid REM)
+    # synthesizes.
+    attribute :theme, String, default: ""
+
+    # cycle_n — 1..8, threaded into the per-cycle prompt branch.
+    attribute :cycle_n, Integer, default: 0
+
+    # ---- i516 v2 — seed-bundle context fields --------------------
+    # Stamped once at SleepEntered by GatherSeeds ; stays stable
+    # across the night's 8 REMs as the single source-of-truth for
+    # the prompt template's per-cycle expansion.
+
+    # musings_seed : newline-separated recent Musing.idea values.
+    attribute :musings_seed, String, default: ""
+
+    # recent_dreams_seed : newline-separated last 5 readings from
+    # prior nights' dream_state.heki.
+    attribute :recent_dreams_seed, String, default: ""
+
+    # body_state_seed : mood + fatigue + recent musings snapshot.
+    attribute :body_state_seed, String, default: ""
+
+    # vow_tensions_seed : curated tensions from the
+    # miette-state vow_tensions.txt stock file.
+    attribute :vow_tensions_seed, String, default: ""
+
+    # commits_today_seed : today's commit messages (git log --since=midnight).
+    attribute :commits_today_seed, String, default: ""
 
     command "ProduceImage" do
       role "Daemon"
@@ -248,11 +296,19 @@ Hecks.bluebook "BodyDream", version: "2026.05.02.1" do
 
     command "RecordImage" do
       role "System"
-      description "Land the :llm adapter's response into the aggregate. text_fr is written by the :dream_image adapter ; text_en is written by the :dream_translate adapter (both declared in body/dream/dream.hecksagon). Either attribute may be passed in isolation — RecordImage updates only what it receives. Both adapters' response_into target this command."
+      description "Land the :llm adapter's response into the aggregate. The :dream_image adapter writes the single concrete `reading` field (file paths, commit hashes, inbox refs, named tensions). i516 v3 (2026-05-08) — the abstract phase is retired ; `reading` is the dream. text_fr / text_en setters retained for one cycle of back-compat so the daemon's hardcoded-impression path doesn't break before the prompt rewrite lands."
       attribute :text_fr, String
       attribute :text_en, String
+      attribute :reading, String
+      attribute :emotional_tone, String
+      attribute :theme, String
+      attribute :cycle_n, Integer
       then_set :text_fr, to: :text_fr
       then_set :text_en, to: :text_en
+      then_set :reading, to: :reading
+      then_set :emotional_tone, to: :emotional_tone
+      then_set :theme, to: :theme
+      then_set :cycle_n, to: :cycle_n
       emits "DreamImageRecorded"
     end
 
@@ -264,13 +320,95 @@ Hecks.bluebook "BodyDream", version: "2026.05.02.1" do
     # first-class, the PM dispatches PlantSeeds directly.
     command "PlantSeeds" do
       role "Daemon"
-      description "Stamp the night's seed material onto the singleton. seeds is a comma-separated join of the 10-source pool's chosen entries ; carrying is Heartbeat.carrying at SleepEntered. Both populate the prompt template the :dream_image adapter resolves each tick."
+      description "Stamp the night's seed material onto the singleton. seeds is a comma-separated join of the 10-source pool's chosen entries ; carrying is Heartbeat.carrying at SleepEntered. Both populate the prompt template the :dream_image adapter resolves each tick. i516 v2 — also accepts the per-source seed fields (musings_seed, recent_dreams_seed, body_state_seed, vow_tensions_seed, commits_today_seed) so PlantSeeds and GatherSeeds can coexist during the migration cycle."
       attribute :seeds, String
       attribute :carrying, String
+      attribute :musings_seed, String
+      attribute :recent_dreams_seed, String
+      attribute :body_state_seed, String
+      attribute :vow_tensions_seed, String
+      attribute :commits_today_seed, String
       then_set :seeds, to: :seeds
       then_set :carrying, to: :carrying
+      then_set :musings_seed, to: :musings_seed
+      then_set :recent_dreams_seed, to: :recent_dreams_seed
+      then_set :body_state_seed, to: :body_state_seed
+      then_set :vow_tensions_seed, to: :vow_tensions_seed
+      then_set :commits_today_seed, to: :commits_today_seed
       emits "DreamSeedsPlanted"
     end
+
+    # i516 v2 — GatherSeeds is the new single source-of-truth surface
+    # for the night's seed bundle. Fired once on SleepEntered (via the
+    # GatherSeedsOnSleep policy below), it stamps all five seed sources
+    # plus the legacy seeds/carrying fields atomically. Each source is
+    # supplied by the caller today (manual fixture / cross-aggregate
+    # adapter) ; out-of-scope tonight to wire the actual reads. The
+    # prompt template's 6+ placeholders expand against these fields
+    # for the night's 8 REMs.
+    command "GatherSeeds" do
+      role "Daemon"
+      description "Gather all seed sources on SleepEntered. Single source-of-truth for the night's 8 REMs. Caller (cross-aggregate adapter or :shell adapter running git log --since=midnight, etc.) supplies each source as a command attribute ; this command stamps them onto the singleton atomically. The prompt template's per-cycle branches read these fields by name (i516 v2)."
+      attribute :musings_seed, String
+      attribute :recent_dreams_seed, String
+      attribute :body_state_seed, String
+      attribute :vow_tensions_seed, String
+      attribute :commits_today_seed, String
+      attribute :seeds, String
+      attribute :carrying, String
+      then_set :musings_seed, to: :musings_seed
+      then_set :recent_dreams_seed, to: :recent_dreams_seed
+      then_set :body_state_seed, to: :body_state_seed
+      then_set :vow_tensions_seed, to: :vow_tensions_seed
+      then_set :commits_today_seed, to: :commits_today_seed
+      then_set :seeds, to: :seeds
+      then_set :carrying, to: :carrying
+      emits "SeedsGathered"
+    end
+  end
+
+  # ============================================================
+  # CROSS-AGGREGATE POLICY — SleepEntered → GatherSeeds (i516 v2)
+  # ============================================================
+  #
+  # Consciousness.EnterSleep emits SleepEntered ; this policy fires
+  # Dream.GatherSeeds in response, populating the seed bundle once
+  # for the night. The caller (or a future :compute / :shell adapter
+  # cascade) supplies the per-source values. Lives on Dream because
+  # the policy-follows-trigger-target rule places policies alongside
+  # the aggregate that owns the triggered command.
+  policy "GatherSeedsOnSleep" do
+    on "SleepEntered"
+    trigger "GatherSeeds"
+  end
+
+  # ============================================================
+  # CROSS-AGGREGATE POLICY — DreamImageRecorded → DreamPulse (i516)
+  # ============================================================
+  #
+  # Bridge LLM cascade output to the statusline. Without this, the
+  # :dream_image adapter populates Dream.reading but
+  # Consciousness.sleep_summary (which the statusline reads) stays
+  # whatever the NREM path wrote.
+  #
+  # The `with: { impression: from_event(:reading) }` form mirrors the
+  # `from_event(:sleep_cycle)` sentinel already used in the PM's
+  # PhaseElapsed handler — at trigger time the runtime would read
+  # the upstream DreamImageRecorded event's :reading attribute. If
+  # the parser rejects this shape, drop the with: clause and accept
+  # that impression-passing requires runtime support filed for
+  # follow-up (the statusline would still flip on DreamPulse, just
+  # without the new reading text).
+  policy "DreamPulseFromImage" do
+    on "DreamImageRecorded"
+    trigger "DreamPulse"
+    across "Consciousness"
+    # NOTE: ideally `with: { impression: from_event(:reading) }` —
+    # but policy-level data passing isn't yet supported by the DSL
+    # parser ; tracked under i517. For now the trigger fires without
+    # impression payload (DreamPulse default). Statusline still flips
+    # on DreamPulse ; the reading flows through dream_state.heki and
+    # WakeReview composes from there.
   end
 end
 
