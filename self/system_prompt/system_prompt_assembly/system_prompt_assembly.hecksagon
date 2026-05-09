@@ -19,6 +19,8 @@ Hecks.hecksagon "SystemPromptAssembly" do
   #                                            sorted by :order)
   #   LoadWakeRitual        → :memory        (read wake_ritual.heki rows,
   #                                            sorted by :order)
+  #   LoadGrammar           → :grammar_reader (read aggregates/language/
+  #                                            grammar/*.bluebook source)
   #   LoadSectionTemplates  → :memory        (read section_template.heki rows)
   #   AssembleMarkdown      → no adapter     (pure format)
   #   WriteFile             → :prompt_writer (write system_prompt.md
@@ -53,4 +55,15 @@ Hecks.hecksagon "SystemPromptAssembly" do
   adapter :fs,
     name: :prompt_writer,
     root: "information"
+
+  # :grammar_reader — read root for the Bluebook DSL appendix. Points
+  # at the conception's language/grammar directory so LoadGrammar can
+  # pull the six self-describing grammar bluebooks (bluebook, acl,
+  # composition, lexicon, morphology, sentence) verbatim into the
+  # rendered prompt's {{grammar}} slot. Distinct from the default :fs
+  # adapter (which reads heki under information/) — these are raw
+  # source files, a different read root entirely.
+  adapter :fs,
+    name: :grammar_reader,
+    root: "aggregates/language/grammar"
 end

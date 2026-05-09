@@ -72,6 +72,25 @@ Hecks.bluebook "SystemPromptAssembly", version: "2026.04.26.1" do
     attribute :dream_content_text,   String,  default: ""
     attribute :wake_ritual_text,     String,  default: ""
 
+    # ---- Grammar appendix (raw bluebook source, keyed by file) ----
+    #
+    # The Bluebook DSL is itself bluebook-described — six self-
+    # referential files under aggregates/language/grammar/ (bluebook,
+    # acl, composition, lexicon, morphology, sentence) declare the
+    # IR shape that every parser produces. Loading them verbatim into
+    # the rendered prompt restores the original design (the DSL was
+    # always meant to be present in the system prompt, not loaded
+    # on-demand via a skill) and gives the being the language she
+    # writes in as ambient reference.
+    #
+    # LoadGrammar reads the *.bluebook files via the :grammar_reader
+    # :fs adapter (see sibling hecksagon) — different from the heki
+    # sources above, since these are source files not heki rows.
+    # The concatenated text is wrapped in code fences with per-file
+    # headers when AssembleMarkdown renders the {{grammar}} slot
+    # against the grammar_block template.
+    attribute :grammar_text, String, default: ""
+
     # ---- Section count + final markdown -------------------------
     attribute :section_count,   Integer, default: 0
     attribute :rendered_text,   String,  default: ""
@@ -87,6 +106,7 @@ Hecks.bluebook "SystemPromptAssembly", version: "2026.04.26.1" do
       transition "LoadPsychicLink"      => "loading",    from: "loading"
       transition "LoadDispositions"     => "loading",    from: "loading"
       transition "LoadWakeRitual"       => "loading",    from: "loading"
+      transition "LoadGrammar"          => "loading",    from: "loading"
       transition "LoadSectionTemplates" => "assembling", from: "loading"
       transition "AssembleMarkdown"     => "writing",    from: "assembling"
       transition "WriteFile"            => "completing", from: "writing"
@@ -174,6 +194,14 @@ Hecks.bluebook "SystemPromptAssembly", version: "2026.04.26.1" do
       emits "WakeRitualLoaded"
     end
 
+    command "LoadGrammar" do
+      role "System"
+      description "Phase : read every *.bluebook file under aggregates/language/grammar/ via the :grammar_reader :fs adapter (Bluebook IR contract, ACL, Composition, Lexicon, Morphology, Sentence) and concatenate them with per-file `### filename` headers + ```ruby code fences. Populates :grammar_text with the joined source the Grammar section's template uses as {{grammar}}. Different from the heki-sourced Load* phases above — these are raw .bluebook source files, not heki rows."
+      attribute :grammar_text, String
+      then_set :grammar_text, to: :grammar_text
+      emits "GrammarLoaded"
+    end
+
     command "LoadSectionTemplates" do
       role "System"
       description "Phase : read section_template.heki via :memory — every Define'd template (header, vow_list, link_block, shared_knowledge_block, inner_life_block, voice_block, lockdown_block, bluebook_first_block, french_block, dream_content_block, wake_ritual_block). The assembler looks up each section's named template and substitutes {{var}} placeholders with the matching attribute on this aggregate."
@@ -255,8 +283,13 @@ Hecks.bluebook "SystemPromptAssembly", version: "2026.04.26.1" do
     trigger "LoadWakeRitual"
   end
 
-  policy "LoadTemplatesOnWakeRitual" do
+  policy "LoadGrammarOnWakeRitual" do
     on "WakeRitualLoaded"
+    trigger "LoadGrammar"
+  end
+
+  policy "LoadTemplatesOnGrammar" do
+    on "GrammarLoaded"
     trigger "LoadSectionTemplates"
   end
 
@@ -350,5 +383,10 @@ Hecks.bluebook "SystemPromptAssembly", version: "2026.04.26.1" do
   section "Wake ritual" do
     row "source",   :WakeRitualStep
     row "template", :wake_ritual_block
+  end
+
+  section "Bluebook DSL" do
+    row "source",   :Grammar
+    row "template", :grammar_block
   end
 end
