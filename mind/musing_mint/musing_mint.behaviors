@@ -10,14 +10,6 @@ Hecks.behaviors "MusingMint" do
   # by running with HECKS_RAND_SEED=0 — the test runner doesn't set it,
   # so AttemptMint here is marked pending until seed wiring lands.
 
-  test "AttemptMint runs" do
-    # [pending] AttemptMint guarded by `rand_below(300) == 0` ; the
-    # behaviors runner has no env-pinned RNG hook, so the gate fires
-    # 1/300 of runs and the test is non-deterministic.
-    tests "AttemptMint", on: "Mint", kind: :pending
-    expect ok: "true"
-  end
-
   test "ReadProvider sets provider" do
     tests "ReadProvider", on: "Mint"
     input  name: "test", provider: "claude"

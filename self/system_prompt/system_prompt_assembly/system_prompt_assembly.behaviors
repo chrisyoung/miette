@@ -25,21 +25,6 @@ Hecks.behaviors "SystemPromptAssembly" do
     expect being: "Miette", output_path: "information/system_prompt.md", phase: "resolving", emits: ["SystemPromptRenderRequested"]
   end
 
-  test "AssembleMarkdown stamps section_count + rendered_text" do
-    # PENDING : the lifecycle gate on AssembleMarkdown requires
-    # phase: "assembling", which only LoadSectionTemplates can set.
-    # Walking there via setup commands would require chaining seven
-    # isolated dispatches (Resolve → LoadIdentity → LoadVows →
-    # LoadPsychicLink → LoadDispositions → LoadWakeRitual →
-    # LoadGrammar → LoadSectionTemplates), and the runner has no
-    # cascading-setup form. Closing this gap needs either a setup
-    # variant that cascades (i499) or a `kind: :ir` parse-tree
-    # assertion on the section list. The cross_cascade test below
-    # exercises the same emit (MarkdownAssembled) end-to-end.
-    tests "AssembleMarkdown", on: "PromptRender", kind: :pending
-    expect ok: "true"
-  end
-
   test "RenderSystemPrompt cascades to SystemPromptRendered through the pipeline" do
     # Mirrors shell section A — rendering produces the assembled
     # markdown that the shell then greps for the four character
