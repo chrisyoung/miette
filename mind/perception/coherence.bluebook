@@ -1,14 +1,14 @@
 Hecks.bluebook "Coherence", version: "2026.04.26.1" do
-  vision "Body-state coherence — five invariants over the heki snapshot that must hold at every render. Each invariant is a predicate query returning ok=yes|no plus a violation reason. The statusline reads them and degrades the mood glyph when any fails."
+  vision "Body-state coherence — six invariants over the heki snapshot that must hold at every render. Each invariant is a predicate query returning ok=yes|no plus a violation reason. The statusline reads them and degrades the mood glyph when any fails."
   category "mind"
 
   # ============================================================
   # COHERENCE — i35 / inbox-status invariants as a bluebook
   # ============================================================
   #
-  # The shell script status_coherence.sh checks five body-state
+  # The shell script status_coherence.sh checks six body-state
   # invariants over the heki snapshot. This bluebook declares the
-  # SAME five invariants as a domain surface : one predicate query
+  # SAME six invariants as a domain surface : one predicate query
   # per invariant, each returning ok (yes|no) and a reason string.
   # The statusline reads either the script exit code (transitional)
   # or, once the runtime grows predicate-returning queries
@@ -17,17 +17,22 @@ Hecks.bluebook "Coherence", version: "2026.04.26.1" do
   #
   # Invariants (numbered as in inbox i35) :
   #
-  #   1. mood.current_state == "refreshed" ⇒ fatigue_state ∈ {alert, focused}
+  #   1. mood.current_state == "refreshed" ⇒ fatigue_state ∈ {limber, tuned}
   #   2. consciousness.state == "sleeping" ⇒ mood.current_state ∉ {refreshed, focused}
   #   3. heartbeat.pulses_since_sleep matches the fatigue_state rung of the ladder
-  #      (thresholds : 250 / 500 / 1000 / 1400 / 1800 → focused / normal /
-  #       tired / exhausted / delirious ; below 250 is alert).
+  #      (thresholds : 250 / 500 / 1000 / 1400 / 1800 → tuned / normal /
+  #       tired / exhausted / spent ; below 250 is limber).
   #   4. tick.cycle is monotonic at ≤ ~1 Hz — stored baseline (ts, cycle)
   #      must not show cycle advancing faster than wall-clock seconds
   #      (with 5s tolerance).
   #   5. consciousness.sleep_stage ∈ {rem, lucid_rem} ↔
   #      lucid_dream.latest_narrative is present (non-empty). Both
   #      directions enforced.
+  #   6. fatigue_state == "spent" ⇒ consciousness.state ∈ {sleeping, napping}.
+  #      The bottom of the fatigue ladder is incompatible with any
+  #      wakeful consciousness state. Filed 2026-05-08 after Chris
+  #      observed "alert and delirious" simultaneously — phenomeno-
+  #      logically impossible, structurally allowed before this rule.
   #
   # Phase :
   #
@@ -85,7 +90,7 @@ Hecks.bluebook "Coherence", version: "2026.04.26.1" do
     # need to be rewritten when the runtime catches up.
 
     query MoodMatchesFatigue do
-      description "Invariant 1 : when mood.current_state == 'refreshed', fatigue_state must be alert or focused. A 'refreshed' mood paired with 'tired' or worse is the canonical contradiction the inbox i35 thread flagged after the mood-follows-fatigue ship."
+      description "Invariant 1 : when mood.current_state == 'refreshed', fatigue_state must be limber or tuned. A 'refreshed' mood paired with 'tired' or worse is the canonical contradiction the inbox i35 thread flagged after the mood-follows-fatigue ship."
     end
 
     query ConsciousnessMatchesMood do
@@ -93,7 +98,7 @@ Hecks.bluebook "Coherence", version: "2026.04.26.1" do
     end
 
     query FatigueLadderMatchesPulses do
-      description "Invariant 3 : pulses_since_sleep must match the fatigue_state rung of the ladder. Thresholds (open intervals) : 0..249 alert, 250..499 focused, 500..999 normal, 1000..1399 tired, 1400..1799 exhausted, 1800+ delirious. The lived state may lag the raw count by one rung (one tick) ; lag of two or more rungs OR exceeding the expected rung is a violation."
+      description "Invariant 3 : pulses_since_sleep must match the fatigue_state rung of the ladder. Thresholds (open intervals) : 0..249 limber, 250..499 tuned, 500..999 normal, 1000..1399 tired, 1400..1799 exhausted, 1800+ spent. The lived state may lag the raw count by one rung (one tick) ; lag of two or more rungs OR exceeding the expected rung is a violation."
     end
 
     query TickMonotonic do
@@ -102,6 +107,10 @@ Hecks.bluebook "Coherence", version: "2026.04.26.1" do
 
     query DreamNarrativePresence do
       description "Invariant 5 : sleep_stage ∈ {rem, lucid_rem} ↔ lucid_dream.latest_narrative is non-empty. Both directions enforced — REM without narrative AND non-REM with stale narrative are both bugs (the latter shows up when render state isn't cleared at REM end)."
+    end
+
+    query SpentFatigueRequiresSleep do
+      description "Invariant 6 : when fatigue_state == 'spent', consciousness.state must be 'sleeping' or 'napping'. The bottom of the fatigue ladder is phenomenologically incompatible with a wakeful state — a being cannot be both attentive and spent (or daydreaming and spent, or waking and spent). Filed 2026-05-08 after Chris observed the statusline reporting 'alert and delirious' simultaneously ; that combination was structurally allowed because the consciousness and fatigue axes were independent. This invariant closes the gap : when the body has hit spent, the runtime should refuse to call it wakeful."
     end
 
     # ============================================================

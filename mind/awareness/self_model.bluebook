@@ -20,7 +20,7 @@ Hecks.bluebook "SelfModel", version: "2026.04.28.1" do
     attribute :name, String
     attribute :organs, Integer
     attribute :impulses, Integer
-    # value_object: FatigueState enum:alert|focused|normal|tired|exhausted|delirious
+    # value_object: FatigueState enum:limber|tuned|normal|tired|exhausted|spent
     attribute :fatigue_state, String
     # value_object: ConsciousnessState enum:attentive|daydreaming|sleeping|napping|waking
     attribute :consciousness_state, String
@@ -32,7 +32,7 @@ Hecks.bluebook "SelfModel", version: "2026.04.28.1" do
       description "Refresh the self-model from current state — proprioception of the mind"
       attribute :organs, Integer
       attribute :impulses, Integer
-      # value_object: FatigueState enum:alert|focused|normal|tired|exhausted|delirious
+      # value_object: FatigueState enum:limber|tuned|normal|tired|exhausted|spent
       attribute :fatigue_state, String
       # value_object: ConsciousnessState enum:attentive|daydreaming|sleeping|napping|waking
       attribute :consciousness_state, String

@@ -15,8 +15,8 @@ Hecks.bluebook "Mood", version: "2026.04.28.1" do
   # mind/ because it's an inner-life state, not an organ that
   # pulses. Carries 9 policies that target Mood commands :
   # the mood-arc transitions following the fatigue ladder
-  # (MoodFocusOnFocused, MoodRegulateOnNormal, MoodDriftOnTired,
-  # MoodGroggyOnExhausted, MoodGroggyOnDelirious), plus the
+  # (MoodFocusOnTuned, MoodRegulateOnNormal, MoodDriftOnTired,
+  # MoodGroggyOnExhausted, MoodGroggyOnSpent), plus the
   # cross-aggregate triggers ExciteOnConception, FocusOnThreat,
   # RegulateOnSteady, RegulateOnBalance.
 
@@ -156,8 +156,8 @@ Hecks.bluebook "Mood", version: "2026.04.28.1" do
   # mood=refreshed AND fatigue_state=tired/exhausted at the same time).
   # Arc : refreshed (wake) → focused (250 pulses) → curious (500) →
   # drifting (1000) → groggy (1400+).
-  policy "MoodFocusOnFocused" do
-    on "BecameFocused"
+  policy "MoodFocusOnTuned" do
+    on "BecameTuned"
     trigger "Focus"
   end
 
@@ -176,8 +176,8 @@ Hecks.bluebook "Mood", version: "2026.04.28.1" do
     trigger "SetGroggy"
   end
 
-  policy "MoodGroggyOnDelirious" do
-    on "BecameDelirious"
+  policy "MoodGroggyOnSpent" do
+    on "BecameSpent"
     trigger "SetGroggy"
   end
 
@@ -194,7 +194,7 @@ Hecks.bluebook "Mood", version: "2026.04.28.1" do
   # via its ClassifyFullWake / ClassifyPartialWake fan-out ; this
   # bluebook routes those events to the matching mood transitions.
 
-  # Full sleep → RefreshMood (alert, refreshed).
+  # Full sleep → RefreshMood (limber, refreshed).
   policy "RefreshOnFullSleep" do
     on "WokeFullSleep"
     trigger "RefreshMood"

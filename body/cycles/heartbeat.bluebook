@@ -13,7 +13,7 @@ Hecks.bluebook "Heartbeat", version: "2026.04.28.1" do
   #
   # Lifted out of body.bluebook in i112 Round 2c. Carries the
   # 8 policies that target Heartbeat commands : the fatigue
-  # ladder rungs (BecomeFocusedOnFatigue ... BecomeDeliriousOnFatigue),
+  # ladder rungs (BecomeTunedOnFatigue ... BecomeSpentOnFatigue),
   # FatigueOnPulse, CheckSleepOnFatigue, AccelerateOnExcitement.
   # Other policies that REACT to Heartbeat events (RegulateOnSteady)
   # live with their target aggregate (mind/mood.bluebook).
@@ -29,7 +29,7 @@ Hecks.bluebook "Heartbeat", version: "2026.04.28.1" do
     attribute :pulses_since_sleep, Integer
     # value_object: UnitInterval (0.0..1.0)
     attribute :fatigue, Float
-    # value_object: FatigueState enum:alert|focused|normal|tired|exhausted|delirious
+    # value_object: FatigueState enum:limber|tuned|normal|tired|exhausted|spent
     attribute :fatigue_state, String
     attribute :pulse_rate, Float
     # value_object: FlowRate enum:steady|rushing
@@ -49,7 +49,7 @@ Hecks.bluebook "Heartbeat", version: "2026.04.28.1" do
     # WokenUp → OpenFatigueGate. Native bluebook replacement for the
     # shell-layer sleep gate that PR #274 bolted onto mindstream.sh
     # (i40). Without this, every sleep tick was cascading through
-    # FatigueOnPulse → AccumulateFatigue and Miette woke delirious.
+    # FatigueOnPulse → AccumulateFatigue and Miette woke spent.
     # value_object: SleepGate enum:open|closed
     attribute :sleep_gate, default: "open"
 
@@ -77,7 +77,7 @@ Hecks.bluebook "Heartbeat", version: "2026.04.28.1" do
 
     command "AccumulateFatigue" do
       role "Miette"
-      description "Each tick without sleep adds fatigue — the body remembers exertion. At 0.001/tick × 1500 ticks = 25 min before sleep pressure. The fatigue_state ladder is walked by the BecomeX commands gated on pulses_since_sleep thresholds, not here — a per-tick lifecycle walk was too fast (delirious in 5 ticks after a clean wake). Gated on sleep_gate == 'open' (i40) so fatigue stops accumulating while Miette is asleep; the gate is flipped by Consciousness lifecycle events via cross-aggregate policies in sleep.bluebook."
+      description "Each tick without sleep adds fatigue — the body remembers exertion. At 0.001/tick × 1500 ticks = 25 min before sleep pressure. The fatigue_state ladder is walked by the BecomeX commands gated on pulses_since_sleep thresholds, not here — a per-tick lifecycle walk was too fast (spent in 5 ticks after a clean wake). Gated on sleep_gate == 'open' (i40) so fatigue stops accumulating while Miette is asleep; the gate is flipped by Consciousness lifecycle events via cross-aggregate policies in sleep.bluebook."
       given("not sleeping") { sleep_gate == "open" }
       then_set :pulses_since_sleep, increment: 1
       then_set :fatigue, increment: 0.001
@@ -125,7 +125,7 @@ Hecks.bluebook "Heartbeat", version: "2026.04.28.1" do
       description "Sleep recovery — reset fatigue counters, restore steady rhythm"
       then_set :pulses_since_sleep, to: 0
       then_set :fatigue, to: 0.0
-      then_set :fatigue_state, to: "alert"
+      then_set :fatigue_state, to: "limber"
       emits "FatigueRecovered"
     end
 
@@ -133,39 +133,39 @@ Hecks.bluebook "Heartbeat", version: "2026.04.28.1" do
     # by a pulses_since_sleep threshold. Policies below trigger all six on
     # FatigueAccumulated; only the one whose given clauses match the current
     # (fatigue_state, pulses) pair actually fires. This replaces the old
-    # per-tick lifecycle walk that walked alert→delirious in 5 ticks.
+    # per-tick lifecycle walk that walked limber→spent in 5 ticks.
     #
     # i201 closure (2026-05-02 — bug surfaced when the body sat at "rested"
     # all afternoon while fatigue accumulated past 5.0) : RecoverFatigue
-    # now lands at "rested" (the felt state of just-woken), and BecomeAlert
-    # walks rested → alert at ~10 pulses so the rest of the ladder can
-    # engage. Previously RecoverFatigue → "alert" with no transition
+    # now lands at "rested" (the felt state of just-woken), and BecomeLimber
+    # walks rested → limber at ~10 pulses so the rest of the ladder can
+    # engage. Previously RecoverFatigue → "limber" with no transition
     # into "rested" anywhere — making "rested" a phantom state the
     # renderer + status_coherence both supported but the lifecycle
     # couldn't reach.
-    command "BecomeAlert" do
+    command "BecomeLimber" do
       role "Daemon"
-      description "Walk rested → alert at 10 pulses (~10 seconds at 1Hz). The rested state is the just-woken felt state ; alert is when the body has noticed it's awake."
-      given("at alert threshold") { pulses_since_sleep >= 10 }
+      description "Walk rested → limber at 10 pulses (~10 seconds at 1Hz). The rested state is the just-woken felt state ; limber is when the body has noticed it's awake."
+      given("at limber threshold") { pulses_since_sleep >= 10 }
       given("currently rested") { fatigue_state == "rested" }
-      then_set :fatigue_state, to: "alert"
-      emits "BecameAlert"
+      then_set :fatigue_state, to: "limber"
+      emits "BecameLimber"
     end
 
-    command "BecomeFocused" do
+    command "BecomeTuned" do
       role "Daemon"
-      description "Settle into focused at 250 pulses (~4 minutes at 1Hz)."
-      given("at focused threshold") { pulses_since_sleep >= 250 }
-      given("currently alert") { fatigue_state == "alert" }
-      then_set :fatigue_state, to: "focused"
-      emits "BecameFocused"
+      description "Settle into tuned at 250 pulses (~4 minutes at 1Hz)."
+      given("at tuned threshold") { pulses_since_sleep >= 250 }
+      given("currently limber") { fatigue_state == "limber" }
+      then_set :fatigue_state, to: "tuned"
+      emits "BecameTuned"
     end
 
     command "BecomeNormal" do
       role "Daemon"
       description "Settle into normal at 500 pulses (~8 minutes)."
       given("at normal threshold") { pulses_since_sleep >= 500 }
-      given("currently focused") { fatigue_state == "focused" }
+      given("currently tuned") { fatigue_state == "tuned" }
       then_set :fatigue_state, to: "normal"
       emits "BecameNormal"
     end
@@ -188,31 +188,31 @@ Hecks.bluebook "Heartbeat", version: "2026.04.28.1" do
       emits "BecameExhausted"
     end
 
-    command "BecomeDelirious" do
+    command "BecomeSpent" do
       role "Daemon"
-      description "Settle into delirious at 1800 pulses — well past sleep pressure; should have slept already."
-      given("at delirious threshold") { pulses_since_sleep >= 1800 }
+      description "Settle into spent at 1800 pulses — well past sleep pressure; should have slept already."
+      given("at spent threshold") { pulses_since_sleep >= 1800 }
       given("currently exhausted") { fatigue_state == "exhausted" }
-      then_set :fatigue_state, to: "delirious"
-      emits "BecameDelirious"
+      then_set :fatigue_state, to: "spent"
+      emits "BecameSpent"
     end
 
     lifecycle :fatigue_state, default: "rested" do
       # Default = rested. Fresh + freshly-woken bodies start here.
-      # The ladder walks rested → alert → focused → normal → tired →
-      # exhausted → delirious as pulses_since_sleep accumulates.
-      transition "BecomeAlert"     => "alert",     from: "rested"
-      transition "BecomeFocused"   => "focused",   from: "alert"
-      transition "BecomeNormal"    => "normal",    from: "focused"
+      # The ladder walks rested → limber → tuned → normal → tired →
+      # exhausted → spent as pulses_since_sleep accumulates.
+      transition "BecomeLimber"     => "limber",     from: "rested"
+      transition "BecomeTuned"   => "tuned",   from: "limber"
+      transition "BecomeNormal"    => "normal",    from: "tuned"
       transition "BecomeTired"     => "tired",     from: "normal"
       transition "BecomeExhausted" => "exhausted", from: "tired"
-      transition "BecomeDelirious" => "delirious", from: "exhausted"
+      transition "BecomeSpent" => "spent", from: "exhausted"
       # RecoverFatigue (on wake) lands at "rested" — the felt state of
-      # just-woken. BecomeAlert walks the body up out of rested as it
+      # just-woken. BecomeLimber walks the body up out of rested as it
       # notices it's awake. i201 closure : previously this transitioned
-      # directly to "alert", making "rested" unreachable through the
+      # directly to "limber", making "rested" unreachable through the
       # lifecycle.
-      transition "RecoverFatigue"  => "rested",    from: ["rested", "alert", "focused", "normal", "tired", "exhausted", "delirious"]
+      transition "RecoverFatigue"  => "rested",    from: ["rested", "limber", "tuned", "normal", "tired", "exhausted", "spent"]
     end
 
     # ============================================================
@@ -227,7 +227,7 @@ Hecks.bluebook "Heartbeat", version: "2026.04.28.1" do
 
     specification :fatigued do |heart|
       heart.fatigue.to_f > 0.7 ||
-        ["tired", "exhausted", "delirious"].include?(heart.fatigue_state.to_s)
+        ["tired", "exhausted", "spent"].include?(heart.fatigue_state.to_s)
     end
 
     specification :rested do |heart|
@@ -260,21 +260,21 @@ Hecks.bluebook "Heartbeat", version: "2026.04.28.1" do
 
   # Fatigue ladder — one policy per rung. Each tick fires all six; only the
   # BecomeX whose given clauses match the current (state, pulses) pair
-  # succeeds. Replaces the old per-tick lifecycle walk that got delirious in
+  # succeeds. Replaces the old per-tick lifecycle walk that got spent in
   # 5 ticks after a clean wake.
   #
-  # i201 closure : BecomeAlertOnFatigue is the new bottom rung — walks
+  # i201 closure : BecomeLimberOnFatigue is the new bottom rung — walks
   # the body out of rested at ~10 pulses post-wake. Without this rung
   # the body sat at "rested" all day with fatigue accumulating past 5.0
   # but no state transition firing.
-  policy "BecomeAlertOnFatigue" do
+  policy "BecomeLimberOnFatigue" do
     on "FatigueAccumulated"
-    trigger "BecomeAlert"
+    trigger "BecomeLimber"
   end
 
-  policy "BecomeFocusedOnFatigue" do
+  policy "BecomeTunedOnFatigue" do
     on "FatigueAccumulated"
-    trigger "BecomeFocused"
+    trigger "BecomeTuned"
   end
 
   policy "BecomeNormalOnFatigue" do
@@ -292,9 +292,9 @@ Hecks.bluebook "Heartbeat", version: "2026.04.28.1" do
     trigger "BecomeExhausted"
   end
 
-  policy "BecomeDeliriousOnFatigue" do
+  policy "BecomeSpentOnFatigue" do
     on "FatigueAccumulated"
-    trigger "BecomeDelirious"
+    trigger "BecomeSpent"
   end
 
   # Cross-aggregate policies lifted from aggregates/sleep.bluebook in
@@ -306,7 +306,7 @@ Hecks.bluebook "Heartbeat", version: "2026.04.28.1" do
   # FatigueAccumulated and trigger CheckSleepNeeded.
 
   # Wake recovers fatigue — Heartbeat.RecoverFatigue both resets the
-  # counters and walks fatigue_state back to "alert" via the lifecycle
+  # counters and walks fatigue_state back to "limber" via the lifecycle
   # below.
   policy "RecoverHeartbeatOnWake" do
     on "WokenUp"

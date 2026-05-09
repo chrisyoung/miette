@@ -1,0 +1,32 @@
+Hecks.behaviors "Coherence" do
+  vision "Behavioral tests for the Coherence aggregate — RecordViolation per-invariant captures, CheckCoherence rollup persistence. The predicate-query tests (one per invariant, testing the actual rule logic) are blocked on i101 ; today the aggregate stores rolled-up results and the shell adapter (status_coherence.sh) computes the predicates. When i101 lands, this file grows kind: :query tests for each invariant rule."
+
+  # ── Coherence aggregate ─────────────────────────────────────────
+
+  test "RecordViolation captures Invariant 1 fact" do
+    tests "RecordViolation", on: "Coherence"
+    input  invariant_number: 1, reason: "mood=refreshed but fatigue_state=tired"
+    expect emits: ["ViolationRecorded"]
+  end
+
+  test "RecordViolation captures Invariant 6 fact" do
+    # Invariant 6 (added 2026-05-08, i498) : fatigue_state == "spent"
+    # is incompatible with a wakeful consciousness state. The rule that
+    # would have caught the original "alert and delirious" contradiction.
+    tests "RecordViolation", on: "Coherence"
+    input  invariant_number: 6, reason: "fatigue_state=spent but consciousness=attentive"
+    expect emits: ["ViolationRecorded"]
+  end
+
+  test "CheckCoherence persists rolled-up violation count" do
+    tests "CheckCoherence", on: "Coherence"
+    input  violation_count: 1, latest_reason: "fatigue_state=spent but consciousness=attentive", checked_at: "2026-05-08T22:39:00Z"
+    expect violation_count: 1, latest_reason: "fatigue_state=spent but consciousness=attentive", checked_at: "2026-05-08T22:39:00Z", emits: ["CoherenceChecked"]
+  end
+
+  test "CheckCoherence with zero violations records the all-clear" do
+    tests "CheckCoherence", on: "Coherence"
+    input  violation_count: 0, latest_reason: "", checked_at: "2026-05-08T22:39:00Z"
+    expect violation_count: 0, emits: ["CoherenceChecked"]
+  end
+end
