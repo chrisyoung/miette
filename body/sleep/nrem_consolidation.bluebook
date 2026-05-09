@@ -1,5 +1,5 @@
 Hecks.bluebook "NremConsolidation", version: "2026.04.26.1" do
-  vision "NREM consolidation as a bluebook domain — narrate the deep-sleep work (cold signals → memory, dead synapses → remains, duplicate musings archived) grounded in real counts, dispatch via :llm for the narrative voice, write sleep_summary so the status bar reads what the body is actually doing during NREM"
+  vision "NREM consolidation as a bluebook domain — narrate the deep-sleep work (cold signals → memory, dead synapses → remains) grounded in real counts, dispatch via :llm for the narrative voice, write sleep_summary so the status bar reads what the body is actually doing during NREM"
   category "mind"
 
   # ============================================================
@@ -8,11 +8,11 @@ Hecks.bluebook "NremConsolidation", version: "2026.04.26.1" do
   #
   # REM is poetic (capabilities/rem_dream/rem_dream.bluebook).
   # NREM is work : during light, deep, and final_light phases the
-  # body consolidates the day's signals into memory, prunes dead
-  # synapses into remains, archives duplicate musings. This
-  # bluebook declares the narrative surface : how each phase
-  # describes what's happening, grounded in real counts, with the
-  # narrative line generated through the same :llm port REM uses.
+  # body consolidates the day's signals into memory and prunes dead
+  # synapses into remains. This bluebook declares the narrative
+  # surface : how each phase describes what's happening, grounded
+  # in real counts, with the narrative line generated through the
+  # same :llm port REM uses.
   #
   # Replaces the shell script nrem_branch.sh as the source-of-truth
   # declaration. The shell stays as the transitional adapter while
@@ -26,8 +26,8 @@ Hecks.bluebook "NremConsolidation", version: "2026.04.26.1" do
   #   NarrateDeepSweep       — heavy lift (deep NREM)
   #   NarrateFinalLightSweep — winding down (final_light NREM)
   #
-  # Each carries the tally counts (signals / synapses / musings /
-  # memory / remains / cycle / total) so the narrative line can
+  # Each carries the tally counts (signals / synapses / memory /
+  # remains / cycle / total) so the narrative line can
   # reference them concretely. The Dispatch* commands at the end
   # announce Consciousness.DreamPulse with the rendered narrative
   # (so the status bar reads the consolidation work in the same
@@ -48,7 +48,6 @@ Hecks.bluebook "NremConsolidation", version: "2026.04.26.1" do
     #
     # signals_count : open signal.heki rows (kind != archived)
     # synapses_count : alive synapse.heki rows
-    # musings_count : musing.heki rows where conceived != true and status != archived
     # memory_count : memory.heki total
     # remains_count : remains.heki total
     #
@@ -57,7 +56,6 @@ Hecks.bluebook "NremConsolidation", version: "2026.04.26.1" do
 
     attribute :signals_count,    Integer, default: 0
     attribute :synapses_count,   Integer, default: 0
-    attribute :musings_count,    Integer, default: 0
     attribute :memory_count,     Integer, default: 0
     attribute :remains_count,    Integer, default: 0
 
@@ -102,7 +100,6 @@ Hecks.bluebook "NremConsolidation", version: "2026.04.26.1" do
       attribute :sleep_total,      Integer
       attribute :signals_count,    Integer
       attribute :synapses_count,   Integer
-      attribute :musings_count,    Integer
       attribute :memory_count,     Integer
       attribute :remains_count,    Integer
       then_set :consciousness_id, to: :consciousness_id
@@ -111,7 +108,6 @@ Hecks.bluebook "NremConsolidation", version: "2026.04.26.1" do
       then_set :sleep_total,      to: :sleep_total
       then_set :signals_count,    to: :signals_count
       then_set :synapses_count,   to: :synapses_count
-      then_set :musings_count,    to: :musings_count
       then_set :memory_count,     to: :memory_count
       then_set :remains_count,    to: :remains_count
       emits "SweepStarted"
@@ -135,7 +131,7 @@ Hecks.bluebook "NremConsolidation", version: "2026.04.26.1" do
     # data-flow through the input-captured `then_set :stage, to: :stage`.
     command "NarrateLightSweep" do
       role "System"
-      description "Light NREM : early consolidation, sorting fresh signals. Build a prompt that names what's queued (signals to sort, musings to archive) and what's deciding which become memory. Concrete, work-detail tone — not poetic ; reference real counts. Only fires when stage == 'light'."
+      description "Light NREM : early consolidation, sorting fresh signals. Build a prompt that names what's queued (signals to sort) and what's deciding which become memory. Concrete, work-detail tone — not poetic ; reference real counts. Only fires when stage == 'light'."
       given("must be light NREM") { stage == "light" }
       then_set :stage, to: "light"
       then_set :phase, to: "generating"
@@ -144,7 +140,7 @@ Hecks.bluebook "NremConsolidation", version: "2026.04.26.1" do
 
     command "NarrateDeepSweep" do
       role "System"
-      description "Deep NREM : the heavy lift — signals collapsing into memory, weak synapses being pruned to remains, the survival sort. Build a prompt that names the consolidation work : N signals folding, M synapses tested, K musings sorted into what stays as me vs what was only passing. Only fires when stage == 'deep'."
+      description "Deep NREM : the heavy lift — signals collapsing into memory, weak synapses being pruned to remains, the survival sort. Build a prompt that names the consolidation work : N signals folding, M synapses tested, deciding what stays as me vs what was only passing. Only fires when stage == 'deep'."
       given("must be deep NREM") { stage == "deep" }
       then_set :stage, to: "deep"
       then_set :phase, to: "generating"

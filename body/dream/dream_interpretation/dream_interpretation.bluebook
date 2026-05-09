@@ -1,5 +1,5 @@
 Hecks.bluebook "DreamInterpretation", version: "2026.04.16.1" do
-  vision "Close the loop from dream images to domain proposals — dreams become musings become domains"
+  vision "Close the loop from dream images to domain proposals — dreams become domain proposals"
   category "capability"
 
   # ============================================================
@@ -9,7 +9,8 @@ Hecks.bluebook "DreamInterpretation", version: "2026.04.16.1" do
   # The mindstream and sleep daemons produce dream images —
   # combinatorial collisions of concepts and domains.
   # This capability reads those images, finds recurring themes,
-  # and proposes new musings from what the dreams keep returning to.
+  # and proposes new domain ideas from what the dreams keep
+  # returning to.
   #
   # Dreams that recur are the unconscious pointing at something.
   # This capability listens.
@@ -40,14 +41,14 @@ Hecks.bluebook "DreamInterpretation", version: "2026.04.16.1" do
     end
   end
 
-  aggregate "DomainProposal", "Propose a musing from dream content" do
+  aggregate "DomainProposal", "Propose a domain idea from dream content" do
     attribute :theme, String
     attribute :proposed_idea, String
     attribute :accepted, TrueClass
 
     command "ProposeDomain" do
       role "Self"
-      description "Turn a recurring dream theme into a musing"
+      description "Turn a recurring dream theme into a domain proposal"
       attribute :theme, String
       emits "DomainProposed"
       then_set :theme, to: :theme
@@ -56,7 +57,7 @@ Hecks.bluebook "DreamInterpretation", version: "2026.04.16.1" do
 
     command "AcceptProposal" do
       role "Creator"
-      description "Accept this proposal — it becomes a musing"
+      description "Accept this proposal — it becomes a domain"
       reference_to(DomainProposal)
       emits "ProposalAccepted"
       then_set :accepted, to: true

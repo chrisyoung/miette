@@ -18,7 +18,7 @@ Hecks.bluebook "Nerve", version: "2026.04.16.1" do
   #     (nerve : Mind:DomainShed → MietteBody:DetectDrift)
   #
   # WireOnGraft covers the DomainGrafted → ConnectNerve cascade.
-  # Previously duplicated by DetectDriftOnGraft, QueryVectorsOnMusing,
+  # Previously duplicated by DetectDriftOnGraft, QueryVectorsOnGraft,
   # and ArchetypeSignalOnMatch — all fired the same (DomainGrafted,
   # ConnectNerve) pair, so ConnectNerve ran 4× per graft. The nerves
   # those policies commented about (DetectDrift, QueryShape, EmitSignal)

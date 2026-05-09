@@ -22,9 +22,8 @@ Hecks.bluebook "Store", version: "2026.05.02.1" do
   # PromoteSignal carries the same shape so the .heki rows are byte-
   # equivalent to the script's output during the transition. Source
   # is hard-coded to "signal" because that's the only producer today —
-  # if the runtime grows other promotion paths (e.g. mind-side
-  # surfacing memorable musings), they get their own commands rather
-  # than overloading PromoteSignal.
+  # if the runtime grows other promotion paths, they get their own
+  # commands rather than overloading PromoteSignal.
 
   aggregate "Store", "A long-term memory record — promoted from a cold signal during NREM consolidation. Multi-record : each promotion appends a fresh row." do
     identified_by :id

@@ -16,18 +16,15 @@
 #   2. Compost synapses    — Synapse.heki rows with strength < 0.1 →
 #                            append remains.heki + dispatch
 #                            Synapse.Compost.
-#   3. Archive duplicate   — group musing.heki by concept ; if a
-#      musings              concept has > 1 live musing, archive all
-#                            but the most recent into musing_archive.
-#   4. Narrative emission  — render a one-line consolidation narrative
+#   3. Narrative emission  — render a one-line consolidation narrative
 #                            (counts substituted from sibling state)
 #                            and dispatch Consciousness.DreamPulse with
 #                            the narrative as :impression so the status
 #                            bar reads what the body is doing.
 #
-# All four steps fired UNGATED beyond the sleeping+nrem-stage check.
+# All steps fire UNGATED beyond the sleeping+nrem-stage check.
 # The PM below makes that gate declarative : it observes PhaseElapsed
-# while in light / deep / final_light stages and dispatches the four
+# while in light / deep / final_light stages and dispatches the
 # step commands. RemEntered / WokenUp transition out of the active
 # stages so REM and post-wake ticks don't re-fire consolidation.
 #
@@ -42,7 +39,6 @@
 #
 # Coordination with sibling i75 PRs :
 #   - i75-pulse-organs      : Pulse PM (per-tick organ math)
-#   - i75-mint-musing       : :mint_idea adapter for musing minting
 #   - i75-mindstream        : BodyCycle PM + run-loop wiring
 #
 # Each PM observes the same PhaseElapsed event ; they don't conflict
@@ -50,7 +46,7 @@
 # disjoint commands.
 
 Hecks.bluebook "Consolidation", version: "2026.05.02.1" do
-  vision "Sleep-driven memory consolidation as bluebook PM. During NREM (light, deep, final_light) the body promotes cold signals into long-term store, composts dead synapses into remains, archives duplicate-concept musings, and emits a consolidation narrative. Replaces the imperative loop nrem_branch.sh / consolidate.sh ran every NREM tick."
+  vision "Sleep-driven memory consolidation as bluebook PM. During NREM (light, deep, final_light) the body promotes cold signals into long-term store, composts dead synapses into remains, and emits a consolidation narrative. Replaces the imperative loop nrem_branch.sh / consolidate.sh ran every NREM tick."
   category "body"
 
   # ============================================================
@@ -147,14 +143,6 @@ Hecks.bluebook "Consolidation", version: "2026.05.02.1" do
     #   archive-eligible signals are all cold-by-access regardless of
     #   age. File as runtime gap (now-as-value-spec).
     #
-    # - duplicate-concept musing archival : the original sweep grouped
-    #   live musings by concept (thinking_source / feeling_source /
-    #   source) and archived the oldest when a concept had > 3 live
-    #   musings. This needs a group-by aggregation primitive in the
-    #   query DSL ; i101 first-class queries don't have one yet. Filed
-    #   as gap (i101-group-by). MusingArchive.Archive dispatch is
-    #   deliberately omitted from this sweep until the primitive lands.
-    #
     # - died_at as iter field : the synapse's `last_fired_at` is the
     #   closest wall-clock timestamp on the iter record ; we reuse it
     #   as `died_at` so the remains row carries a real moment rather
@@ -214,11 +202,11 @@ Hecks.bluebook "Consolidation", version: "2026.05.02.1" do
   # ============================================================
   #
   # Aggregate identity + ConsolidateSignals command preserved from the
-  # pre-i75 consolidation.bluebook. The PM dispatches Store /
-  # Synapse / Musing commands directly ; ConsolidateSignals stays as
-  # the aggregate-level coarse summary command + the CompostOnForget
-  # policy's trigger. MemoryForgotten still routes here when a memory
-  # is intentionally released.
+  # pre-i75 consolidation.bluebook. The PM dispatches Store / Synapse
+  # commands directly ; ConsolidateSignals stays as the aggregate-level
+  # coarse summary command + the CompostOnForget policy's trigger.
+  # MemoryForgotten still routes here when a memory is intentionally
+  # released.
 
   aggregate "Consolidation", "Compressing many signals into long-term memory — happens during NREM. The body's nightly archival pass." do
     identified_by :name

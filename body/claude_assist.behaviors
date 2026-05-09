@@ -1,5 +1,5 @@
 Hecks.behaviors "ClaudeAssist" do
-  vision "Behavioral tests for the ClaudeAssist aggregate — provider switching for minting."
+  vision "Behavioral tests for the ClaudeAssist aggregate — LLM provider switching."
 
   # ── ClaudeAssist aggregate ──────────────────────────────────────────
   # (merged from mindstream.behaviors during i112 cleanup)
@@ -14,8 +14,8 @@ Hecks.behaviors "ClaudeAssist" do
     expect provider: "local"
   end
 
-  test "DisableMinting runs" do
-    tests "DisableMinting", on: "ClaudeAssist"
+  test "DisableLLM runs" do
+    tests "DisableLLM", on: "ClaudeAssist"
     expect provider: "off"
   end
 end

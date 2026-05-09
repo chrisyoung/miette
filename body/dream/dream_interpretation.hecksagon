@@ -44,10 +44,10 @@ Hecks.hecksagon "DreamInterpretation" do
   #     "first_theme":       "w1",
   #     "themes_above_threshold": [w1, …] } // count >= 3
   #
-  # The per-theme ExtractTheme fan-out + count-gated MintMusing
-  # dispatch are NOT wired today. Both need DSL primitives still
-  # to land : JSON-destructure then_set form ; policy count-gate.
-  # Filed as inbox follow-ons.
+  # The per-theme ExtractTheme fan-out is NOT wired today. Needs
+  # JSON-destructure then_set form ; policy count-gate. Filed as
+  # inbox follow-ons. The count-gated MintMusing dispatch was
+  # retired 2026-05-08 alongside the Musing system.
   #
   # ---- :llm adapter --------------------------------------------
   #

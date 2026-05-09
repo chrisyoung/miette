@@ -3,13 +3,13 @@
 # Promoted from dream-study/draft/mind_pm.bluebook.draft on 2026-05-02
 # after Phase 1 (39f279d6), Phase 2 (be5db683), Phase 3 (48d33a75) all
 # landed. Creates the new mind/ room sibling to mind/awareness/, mind/state/,
-# mind/musings/, etc. — verified no name collision before promotion.
+# etc. — verified no name collision before promotion.
 #
 # Activation : runs in Ruby Hecks::Runtime. mindstream.sh awake branch +
-# pulse_organs.sh + daydream.sh + mint_musing.sh + surface_musing.sh remain
-# in production until the Rust runtime executes process_managers (follow-on
-# branch). Until then this PM is live in Ruby specs but a no-op in the
-# daemons that fork hecks-life subprocess per dispatch.
+# pulse_organs.sh + daydream.sh remain in production until the Rust
+# runtime executes process_managers (follow-on branch). Until then this
+# PM is live in Ruby specs but a no-op in the daemons that fork
+# hecks-life subprocess per dispatch.
 #
 # Mind is the active driver — present during wake AND during lucid REM. Drives
 # the conversation, dispatches commands into Body's organs, steers the lucid
@@ -20,7 +20,6 @@
 #   - mindstream.sh awake branch (Tick.MindstreamTick + 13-attr Awareness snapshot)
 #   - pulse_organs.sh (synapse strengthen/decay, signal fire, focus reweight, arc advance)
 #   - daydream.sh (idle-time content)
-#   - mint_musing.sh + surface_musing.sh (creative-thought pipeline)
 #
 # Subsumes (when engaged_in_lucid_dream, via Lucidity bridge) :
 #   - LucidDream.SteerDream dispatches (the steering vocabulary)
@@ -46,7 +45,7 @@
 #     DSL captures these as Procs to be invoked at runtime.
 
 Hecks.bluebook "Mind", version: "2026.05.02.1" do
-  vision "The active driver. Present during wake AND lucid REM ; absent during non-lucid sleep. Subsumes the mindstream awake branch + pulse_organs + daydream + musing pipeline + lucid steering."
+  vision "The active driver. Present during wake AND lucid REM ; absent during non-lucid sleep. Subsumes the mindstream awake branch + pulse_organs + daydream + lucid steering."
   category "mind"
 
   # ============================================================
@@ -124,8 +123,8 @@ Hecks.bluebook "Mind", version: "2026.05.02.1" do
 
     # ----- States --------------------------------------------------
     # `engaged_in_wake` is the active driver state — full per-tick organ
-    # math, daydream, musing, awareness snapshot. `engaged_in_lucid_dream`
-    # is the dream-steering state — only Lucidity bridges into here.
+    # math, daydream, awareness snapshot. `engaged_in_lucid_dream` is
+    # the dream-steering state — only Lucidity bridges into here.
     # `absent` is the rest state during non-lucid sleep AND the initial
     # state before first wake.
 
@@ -177,17 +176,17 @@ Hecks.bluebook "Mind", version: "2026.05.02.1" do
     # pulse_organs.sh owned today : Tick increment, Awareness snapshot
     # (13 attrs — see runtime gap note below), Synapse strengthen+decay
     # for the carried topic, Signal fire (somatic + concept), Focus
-    # reweight, Arc advance, Daydream wander, MusingMint surface + mint.
-    # The bluebook commands clamp/decay/multiply internally (i106 DSL
-    # primitives) — the PM just dispatches.
+    # reweight, Arc advance, Daydream wander. The bluebook commands
+    # clamp/decay/multiply internally (i106 DSL primitives) — the PM
+    # just dispatches.
     #
     # i219 heal (2026-05-02) : the prior trigger was `on "PhaseElapsed"`,
     # which only fires during sleeping_* states (Consciousness.ElapsePhase
     # is dispatched from BodyCycle PM only on sleeping_light/rem/deep/
     # final_light per body_cycle.bluebook:137-149). Result : during
     # attentive — the live state today — none of these wake dispatches
-    # fired. Daydreams didn't wander, musings didn't mint, awareness
-    # didn't snapshot. Switching to `on "BodyPulse"` puts the handler
+    # fired. Daydreams didn't wander, awareness didn't snapshot.
+    # Switching to `on "BodyPulse"` puts the handler
     # on the right event surface : BodyPulse fires every second during
     # ALL consciousness states, but the state-machine transition
     # `engaged_in_wake → engaged_in_wake` gates this handler to wake
@@ -270,42 +269,10 @@ Hecks.bluebook "Mind", version: "2026.05.02.1" do
       # Daydream during idle windows (legacy daydream.sh) — runtime
       # adapter checks heartbeat idle-seconds gate.
       dispatch "Daydream.Wander", with: { name: "daydream" }
-      # Musing pipeline (legacy surface_musing.sh + mint_musing.sh) —
-      # RESTORED via i229. The Mind PM dispatches the entrypoints every
-      # BodyPulse ; the receiving commands' own `given` clauses gate
-      # the cadence so each dispatch is cheap when the gate fails.
-      #
-      # i229 enabled this : `rand_below(N) == 0` (stochastic 1/N gate)
-      # and `<expr>.modulo(N) == 0` (every-Nth-tick periodic gate) are
-      # bluebook-grounded predicate primitives that lift the legacy
-      # shell-side `if [ $((RANDOM % N)) -eq 0 ]` and `(tick % N).zero?`
-      # gates into declarative IR.
-      #
-      # MusingMint.AttemptMint has `given { rand_below(300) == 0 }` on
-      # the entrypoint command (musing_mint.bluebook:108) — fires the
-      # full mint pipeline ~1 in 300 ticks (≈ 5-min cadence at 1Hz),
-      # short-circuits otherwise. That's the per-300-tick stochastic
-      # cadence the legacy mindstream's `RANDOM % 300 == 0` produced ;
-      # net effect : musing_mint counter advances slowly (~12/hour
-      # instead of the runaway 60/min the gate-less path produced).
-      #
-      # SurfaceMusing.Surface walks the unconceived pool every tick ;
-      # its DWELL gate (loop_count mod dwell_ticks == 0) lives on
-      # MarkConceived inside the surface_musing pipeline, so the head
-      # dwells on the statusline for the dwell window before the cursor
-      # advances. Tick-counter is passed via :loop_count ; the bluebook
-      # owns the modulo math via the i229 `<expr>.modulo(N)` primitive
-      # (see surface_musing.bluebook MarkConceived gate).
-      #
-      # i228 (chain-trigger separate from response-target) and i227
-      # (compute-context primitive) — still needed for the LLM dispatch
-      # to fire on a stub command without double-counting and for the
-      # prompt-context to be assembled from heki state. Without them,
-      # AttemptMint's pipeline still works but the LLM call is the
-      # expensive path ; rand_below(300) keeps that path cheap so the
-      # net cost of full restoration is acceptable.
-      dispatch "MusingMint.AttemptMint",   with: { name: "musing_mint" }
-      dispatch "SurfaceMusing.Surface",    with: { name: "surface", loop_count: from_pm(:tick_count, default: 0) }
+      # Musing pipeline retired 2026-05-08 — MusingMint.AttemptMint
+      # and SurfaceMusing.Surface dispatches removed. musing.heki has
+      # been dormant since 2026-04-28 ; the system is now retired
+      # entirely. Daydream remains as the wake-time wandering surface.
     end
 
     # ----- Lucidity bridge → enter dream-steering ----------------
@@ -395,12 +362,12 @@ end
 #
 # Once Phase 1+3 merge :
 #   1. Move this file to mind/mind.bluebook (creating the new Mind room).
-#   2. Add mind/mind.hecksagon declaring :llm adapter for daydream / musing
-#      / lucid steering, :memory adapter for awareness snapshot reads.
+#   2. Add mind/mind.hecksagon declaring :llm adapter for daydream /
+#      lucid steering, :memory adapter for awareness snapshot reads.
 #   3. Delete mindstream.sh's awake branch (lines ~200-282 of mindstream.sh).
 #   4. Delete pulse_organs.sh (subsumed by PhaseElapsed handler's organ
 #      fan-out + i106 DSL math primitives).
-#   5. Delete daydream.sh, surface_musing.sh, mint_musing.sh (subsumed).
+#   5. Delete daydream.sh (subsumed).
 #   6. Add Mind PM smoke spec under dream-study/test-gate/ — verify the
 #      three-state lifecycle + the per-tick fan-out command count (~10).
 #

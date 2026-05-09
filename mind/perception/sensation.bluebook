@@ -6,10 +6,9 @@ Hecks.bluebook "Sensation", version: "2026.04.28.1" do
   # SENSATION — raw input before interpretation
   # ============================================================
   #
-  # Lifted out of awareness.bluebook in i112 (cluster split). Carries
-  # 1 policy whose trigger lives here :
-  #   SenseOnMusing (Mused → Sense) — every musing surfaces as raw
-  #     sensation feeding the next loop.
+  # Lifted out of awareness.bluebook in i112 (cluster split). The
+  # SenseOnMusing (Mused → Sense) policy was retired 2026-05-08
+  # alongside the Musing aggregate.
 
   aggregate "Sensation", "Raw input before interpretation — what just arrived" do
     identified_by :ref
@@ -33,8 +32,4 @@ Hecks.bluebook "Sensation", version: "2026.04.28.1" do
     end
   end
 
-  policy "SenseOnMusing" do
-    on "Mused"
-    trigger "Sense"
-  end
 end

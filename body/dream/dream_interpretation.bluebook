@@ -20,10 +20,11 @@ Hecks.bluebook "DreamInterpretation", version: "2026.05.03.1" do
   # triggers GatherDreamCorpus ; the :compute adapter resolves
   # the function and chains the JSON payload into InterpretDream
   # under :dream_corpus_json. Downstream policies pick up from
-  # there. The per-theme ExtractTheme/MintMusing fan-out + the
-  # Narrate/LockNarrative LLM chain remain shell-driven until
+  # there. The per-theme ExtractTheme fan-out + the Narrate/
+  # LockNarrative LLM chain remain shell-driven until
   # (a) JSON-destructure then_set + (b) policy count-gate primitive
-  # land — both filed as inbox follow-ons.
+  # land — both filed as inbox follow-ons. The MintMusing fan-out
+  # was retired 2026-05-08 alongside the Musing system.
 
   aggregate "DreamInterpretation", "Always interpret the dream on waking — extract meaning, propose action" do
     identified_by :name

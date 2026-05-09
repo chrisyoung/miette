@@ -7,15 +7,15 @@ Hecks.bluebook "DomainAwareness", version: "2026.04.28.1" do
   # ============================================================
   #
   # Lifted out of awareness.bluebook in i112 (cluster split). Carries
-  # 2 policies :
-  #   DomainAwarenessOnResponse (Mused → IdentifyRelatedDomains) —
-  #     each musing kicks off a corpus search for related domains.
-  #     Trigger is local.
+  # 1 policy :
   #   SenseDomainsOnHighlight (DomainHighlighted → SenseOrgans across
   #     "MietteBody") — surfacing a related domain pings the body's
   #     proprioception. Trigger is remote ; policy lives with the
   #     source aggregate so DomainAwareness-emitted events stay
   #     grouped.
+  #
+  # The DomainAwarenessOnResponse (Mused → IdentifyRelatedDomains)
+  # policy was retired 2026-05-08 alongside the Musing aggregate.
 
   aggregate "DomainAwareness", "Every response highlights related domains — every thought has a domain address" do
     identified_by :topic
@@ -47,11 +47,6 @@ Hecks.bluebook "DomainAwareness", version: "2026.04.28.1" do
       attribute :relevance, String
       emits "DomainHighlighted"
     end
-  end
-
-  policy "DomainAwarenessOnResponse" do
-    on "Mused"
-    trigger "IdentifyRelatedDomains"
   end
 
   policy "SenseDomainsOnHighlight" do

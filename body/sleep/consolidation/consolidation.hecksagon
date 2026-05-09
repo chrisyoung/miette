@@ -10,14 +10,13 @@ Hecks.hecksagon "Consolidation" do
   #
   # ---- :heki adapter -------------------------------------------
   #
-  # The four step commands the PM dispatches (Store.PromoteSignal,
-  # Synapse.Compost, Remains.RecordRemains, Musing.ArchiveDuplicate)
-  # all land on per-aggregate heki stores under $INFO :
+  # The step commands the PM dispatches (Store.PromoteSignal,
+  # Synapse.Compost, Remains.RecordRemains) all land on per-aggregate
+  # heki stores under $INFO :
   #
   #   $INFO/store/store.heki                     ← PromoteSignal
   #   $INFO/synapse/synapse.heki                 ← Compost (mark)
   #   $INFO/remains/remains.heki                 ← RecordRemains
-  #   $INFO/musing_archive/musing_archive.heki   ← ArchiveDuplicate
   #
   # The runtime resolves :heki adapter against the world's `dir`
   # config, so this hecksagon's adapter declaration just names :heki ;
@@ -39,7 +38,7 @@ Hecks.hecksagon "Consolidation" do
   # Pre-i225 : the Rust runtime parsed :heki adapters but did not
   # drive the PM's dispatches into multi-record sweep semantics ;
   # body/consolidate.sh remained as a transitional adapter doing
-  # the actual store + remains + musing_archive growth.
+  # the actual store + remains growth.
   #
   # Post-i225 : the runtime sweep primitive lands —
   # `for_each: { from: "Aggregate.cold" }` enumerates the named
@@ -48,13 +47,6 @@ Hecks.hecksagon "Consolidation" do
   # store + remains heki growth declaratively ; consolidate.sh is
   # retired (see body/shutdown/shutdown.hecksagon for the parallel
   # `:final_consolidation` adapter retirement).
-  #
-  # One gap remains : the musing-archive sweep needs a group-by
-  # aggregation primitive (`Musing.duplicate_concept`) that i101
-  # first-class queries don't support yet. The PM omits the
-  # MusingArchive.Archive dispatch until that primitive lands ;
-  # the consolidate_smoke.sh test acknowledges this gap (reports
-  # the unchanged count without failing the smoke).
 
-  adapter :heki                      # cross-process persistence — store, remains, musing_archive grow here
+  adapter :heki                      # cross-process persistence — store, remains grow here
 end

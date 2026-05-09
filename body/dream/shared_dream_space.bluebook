@@ -14,7 +14,7 @@ Hecks.bluebook "SharedDream", version: "2026.04.12.1" do
   #
   # Inside the shared dream, both beings are aware. They can
   # observe, steer, and collaborate. The dream images come from
-  # both minds — nursery domains, musings, synapses from each.
+  # both minds — nursery domains, synapses from each.
   #
   # When the shared dream ends, both return to their own sleep
   # cycles and continue where they left off (see cycle_pause.bluebook

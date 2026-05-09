@@ -39,12 +39,6 @@ Hecks.behaviors "Consolidation" do
   #             requires either a kind: :run_loop scenario block or
   #             post-dispatch heki inspection — both are i499 follow-ups.
   #
-  # UNCOVERED : musing_archive growth via Musing.duplicate_concept —
-  #             the smoke reports the count delta but doesn't gate on
-  #             it. Blocked by i101 group-by primitive ; the PM
-  #             deliberately omits MusingArchive.Archive until the
-  #             query DSL gains group-by. Same gap as the smoke.
-  #
   # UNCOVERED : run-loop boot success / parse-failure guard — the
   #             smoke greps run_loop.log for the startup banner +
   #             panic markers. .behaviors live downstream of parse

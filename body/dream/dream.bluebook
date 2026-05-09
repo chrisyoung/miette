@@ -127,9 +127,17 @@ Hecks.bluebook "BodyDream", version: "2026.05.02.1" do
       #   self_aggregate, vow, musing, french_lit, carrying) needs
       #   first-class queries on Awareness / Vow / etc. before the PM
       #   can sweep them. Per-source query rollout is the i222-followon
-      #   work ; this PM ships with Musing as the seed-source floor.
+      #   work.
+      #
+      # i516 v3 (2026-05-08) — Musings retired as a seed source.
+      # musing.heki has been dormant since 2026-04-28 ; the seed
+      # plumbing now reads from recent_dreams + body_state +
+      # vow_tensions + commits_today (gathered on SleepEntered via
+      # Dream.GatherSeeds). The for_each Musings sweep below stays
+      # commented as historical context until the GatherSeeds adapter
+      # ships its :compute reads.
 
-      dispatch "DreamSeed.PlantSeed", for_each: { from: "Musings.Musing.recent" }, with: { image: from_iter(:idea) }
+      # dispatch "DreamSeed.PlantSeed", for_each: { from: "Musings.Musing.recent" }, with: { image: from_iter(:idea) }
     end
 
     # ----- First REM tick : seeds activate, generation begins ------
@@ -269,14 +277,11 @@ Hecks.bluebook "BodyDream", version: "2026.05.02.1" do
     # across the night's 8 REMs as the single source-of-truth for
     # the prompt template's per-cycle expansion.
 
-    # musings_seed : newline-separated recent Musing.idea values.
-    attribute :musings_seed, String, default: ""
-
     # recent_dreams_seed : newline-separated last 5 readings from
     # prior nights' dream_state.heki.
     attribute :recent_dreams_seed, String, default: ""
 
-    # body_state_seed : mood + fatigue + recent musings snapshot.
+    # body_state_seed : mood + fatigue + recent inbox snapshot.
     attribute :body_state_seed, String, default: ""
 
     # vow_tensions_seed : curated tensions from the
@@ -320,17 +325,15 @@ Hecks.bluebook "BodyDream", version: "2026.05.02.1" do
     # first-class, the PM dispatches PlantSeeds directly.
     command "PlantSeeds" do
       role "Daemon"
-      description "Stamp the night's seed material onto the singleton. seeds is a comma-separated join of the 10-source pool's chosen entries ; carrying is Heartbeat.carrying at SleepEntered. Both populate the prompt template the :dream_image adapter resolves each tick. i516 v2 — also accepts the per-source seed fields (musings_seed, recent_dreams_seed, body_state_seed, vow_tensions_seed, commits_today_seed) so PlantSeeds and GatherSeeds can coexist during the migration cycle."
+      description "Stamp the night's seed material onto the singleton. seeds is a comma-separated join of seed-pool entries ; carrying is Heartbeat.carrying at SleepEntered. Both populate the prompt template the :dream_image adapter resolves each tick. i516 v3 — also accepts the per-source seed fields (recent_dreams_seed, body_state_seed, vow_tensions_seed, commits_today_seed) so PlantSeeds and GatherSeeds can coexist during the migration cycle. Musings retired (musing.heki dormant since 2026-04-28)."
       attribute :seeds, String
       attribute :carrying, String
-      attribute :musings_seed, String
       attribute :recent_dreams_seed, String
       attribute :body_state_seed, String
       attribute :vow_tensions_seed, String
       attribute :commits_today_seed, String
       then_set :seeds, to: :seeds
       then_set :carrying, to: :carrying
-      then_set :musings_seed, to: :musings_seed
       then_set :recent_dreams_seed, to: :recent_dreams_seed
       then_set :body_state_seed, to: :body_state_seed
       then_set :vow_tensions_seed, to: :vow_tensions_seed
@@ -348,15 +351,13 @@ Hecks.bluebook "BodyDream", version: "2026.05.02.1" do
     # for the night's 8 REMs.
     command "GatherSeeds" do
       role "Daemon"
-      description "Gather all seed sources on SleepEntered. Single source-of-truth for the night's 8 REMs. Caller (cross-aggregate adapter or :shell adapter running git log --since=midnight, etc.) supplies each source as a command attribute ; this command stamps them onto the singleton atomically. The prompt template's per-cycle branches read these fields by name (i516 v2)."
-      attribute :musings_seed, String
+      description "Gather all seed sources on SleepEntered. Single source-of-truth for the night's 8 REMs. Caller (cross-aggregate adapter or :shell adapter running git log --since=midnight, etc.) supplies each source as a command attribute ; this command stamps them onto the singleton atomically. The prompt template's per-cycle branches read these fields by name (i516 v3 — musings_seed retired)."
       attribute :recent_dreams_seed, String
       attribute :body_state_seed, String
       attribute :vow_tensions_seed, String
       attribute :commits_today_seed, String
       attribute :seeds, String
       attribute :carrying, String
-      then_set :musings_seed, to: :musings_seed
       then_set :recent_dreams_seed, to: :recent_dreams_seed
       then_set :body_state_seed, to: :body_state_seed
       then_set :vow_tensions_seed, to: :vow_tensions_seed

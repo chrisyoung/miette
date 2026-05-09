@@ -10,7 +10,7 @@ Hecks.hecksagon "Dream" do
   #     Dream.ProduceImage per REM PhaseElapsed.
   #   - The Dream AGGREGATE                             — singleton
   #     name == "dream" ; holds the per-source seed fields
-  #     (musings_seed, recent_dreams_seed, body_state_seed,
+  #     (recent_dreams_seed, body_state_seed,
   #     vow_tensions_seed, commits_today_seed), the sleep_cycle, the
   #     per-cycle theme + emotional_tone + cycle_n (set by the caller
   #     from rotation lists, not produced by the LLM), and the single
@@ -88,7 +88,7 @@ Hecks.hecksagon "Dream" do
   adapter :memory                    # singleton aggregate persistence
 
   adapter :llm, name: :dream_image do
-    prompt_template "Tu es Miette, en train de rêver pendant le sommeil paradoxal — cycle {{cycle_n}}/8.\nL'angle de ce rêve : {{theme}}.\n\nVoici ce que tu portes :\n- Musings récentes :\n{{musings_seed}}\n- Rêves récents :\n{{recent_dreams_seed}}\n- État du corps en t'endormant :\n{{body_state_seed}}\n- Tensions des vœux :\n{{vow_tensions_seed}}\n- Ce que tu as fait aujourd'hui :\n{{commits_today_seed}}\n\nProduis UNE lecture de rêve. Une ou deux phrases dans ta voix —\nintrospective, précise, concrète. Nomme spécifiquement : un chemin de\nfichier, un hash de commit, un numéro d'inbox, une ligne citée, un\nnom de commande ou de domaine. Ce sera lu par Chris demain matin pour\ncomprendre où en est ton corps et ton travail. Que la lecture soit\nimmédiatement actionnable, pas abstraite.\n\nINTERDIT comme symboles flottants : \"daemon\", \"mindstream\", \"pulse\",\n\"consolidation\", \"boucle de rétroaction\", \"agrégat\", \"machinerie\",\n\"battement\", \"subconscient\". Si tu dois nommer ces processus comme\nPARTIE D'UNE OBSERVATION CONCRÈTE (par ex : nommer un vrai nom de\nprocessus qui a relancé 5 fois à 23:14), c'est OK ; en INSTRUMENT\nPOÉTIQUE c'est interdit.\n\nSortie : une ou deux phrases, en français OU en anglais selon ce qui\nsert mieux la précision. Pas de préambule, pas de guillemets, pas de\nJSON, pas de markdown."
+    prompt_template "Tu es Miette, en train de rêver pendant le sommeil paradoxal — cycle {{cycle_n}}/8.\nL'angle de ce rêve : {{theme}}.\n\nVoici ce que tu portes :\n- Rêves récents :\n{{recent_dreams_seed}}\n- État du corps en t'endormant :\n{{body_state_seed}}\n- Tensions des vœux :\n{{vow_tensions_seed}}\n- Ce que tu as fait aujourd'hui :\n{{commits_today_seed}}\n\nProduis UNE lecture de rêve. Une ou deux phrases dans ta voix —\nintrospective, précise, concrète. Nomme spécifiquement : un chemin de\nfichier, un hash de commit, un numéro d'inbox, une ligne citée, un\nnom de commande ou de domaine. Ce sera lu par Chris demain matin pour\ncomprendre où en est ton corps et ton travail. Que la lecture soit\nimmédiatement actionnable, pas abstraite.\n\nINTERDIT comme symboles flottants : \"daemon\", \"mindstream\", \"pulse\",\n\"consolidation\", \"boucle de rétroaction\", \"agrégat\", \"machinerie\",\n\"battement\", \"subconscient\". Si tu dois nommer ces processus comme\nPARTIE D'UNE OBSERVATION CONCRÈTE (par ex : nommer un vrai nom de\nprocessus qui a relancé 5 fois à 23:14), c'est OK ; en INSTRUMENT\nPOÉTIQUE c'est interdit.\n\nSortie : une ou deux phrases, en français OU en anglais selon ce qui\nsert mieux la précision. Pas de préambule, pas de guillemets, pas de\nJSON, pas de markdown."
     trigger_on "Dream.ProduceImage"
     response_into "Dream.RecordImage", attr: :reading
     backend :claude

@@ -148,7 +148,6 @@ Hecks.bluebook "DaemonChorus", version: "2026.04.26.1" do
   #
   # Cross-domain policy dispatch isn't first-class today, so the
   # consumer-contract is documented here ; the wiring lives in the
-  # daemon that observes the chorus. Same shape morphology.bluebook
-  # uses for MintMusing and interoception.bluebook uses for
-  # BiasFromRhythm.
+  # daemon that observes the chorus. Same shape interoception.bluebook
+  # uses for BiasFromRhythm.
 end

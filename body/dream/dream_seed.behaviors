@@ -31,9 +31,8 @@ Hecks.behaviors "DreamSeed" do
   #
   # On EnterSleep, the night's seed pool draws from four sources :
   #
-  #   1. session        — the day's musings (Musing.recent), the
-  #                       carrying field, recent commits, open inbox
-  #                       items.
+  #   1. session        — the carrying field, recent commits, open
+  #                       inbox items. (Musings retired 2026-05-08.)
   #   2. previous dreams — the last N dream impressions (DreamCorpus
   #                       echo, French originals).
   #   3. body state     — current mood, fatigue level, heartbeat
@@ -114,7 +113,7 @@ Hecks.behaviors "DreamSeed" do
   # UNCOVERED : per-source query availability — Vow.open_tensions,
   #             DreamCorpus.recent_dreams (last N), BodyState.snapshot.
   #             These first-class queries are the redesign's data
-  #             intake surface ; today only Musing.recent exists.
-  #             Filed as i517-source-queries follow-up.
+  #             intake surface. Filed as i517-source-queries
+  #             follow-up. (Musing.recent retired 2026-05-08.)
 
 end

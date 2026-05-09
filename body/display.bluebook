@@ -1,5 +1,5 @@
 Hecks.bluebook "Display", version: "2026.04.28.1" do
-  vision "What the statusline shows — musings and domain pairs surfaced from the mindstream"
+  vision "What the statusline shows — current thought and ideas surfaced from the mindstream"
   category "body"
 
   # ============================================================
@@ -12,7 +12,7 @@ Hecks.bluebook "Display", version: "2026.04.28.1" do
   #
   # Lifted out of mindstream.bluebook in i112.
 
-  aggregate "Display", "What the statusline shows — musings and domain pairs" do
+  aggregate "Display", "What the statusline shows — current thought and ideas" do
     identified_by :name
     attribute :name, String
     attribute :current_thought, String

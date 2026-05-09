@@ -118,50 +118,18 @@ Hecks.behaviors "Awareness" do
     expect meta_level: 2, insight: "sample"
   end
 
-  # i161 closed — inject_refs now disambiguates target_ctx by
-  # preferring the dispatching command's aggregate context over
-  # depth-then-path iteration order. The cross-corpus collision
-  # between miette/mind/state/Musing and the capability-namespace
-  # Musing used to misroute the singleton fallback ; the fix prefers
-  # the same-context match first, so the cascade reaches
-  # MusingRecorded again. See rust/src/runtime/mod.rs inject_refs.
   test "ReflectOnObservation cascades through policy chain" do
     tests "ReflectOnObservation", on: "Witness", kind: :cross_cascade
     setup  "Observe", observing: "sample"
-    setup  "MuseOnState", trigger: "sample"
     input  insight: "sample"
-    expect emits_subset: ["ReflectionOccurred", "MusingRecorded"]
+    expect emits_subset: ["ReflectionOccurred"]
   end
 
-
-  # ── Musing aggregate ──────────────────────────────────────────
-
-  test "MuseOnState sets trigger" do
-    tests "MuseOnState", on: "Musing", kind: :cross_cascade
-    input  trigger: "sample"
-    expect trigger: "sample"
-  end
-
-  test "MuseOnState cascades through policy chain" do
-    tests "MuseOnState", on: "Musing", kind: :cross_cascade
-    setup  "Sense", source: "sample", content: "sample", valence: 1.0
-    setup  "Recognize", sensation: "sample", recognized_as: "sample", confidence: 1.0
-    setup  "AttendTo", target: "sample", intensity: 1.0
-    setup  "FormIntention", goal: "sample", origin: "sample", strength: 1.0
-    setup  "Observe", observing: "sample"
-    setup  "RefreshSelfModel", organs: 1, impulses: 1, fatigue_state: "sample", consciousness_state: "sample", nursery_size: 1, family_size: 1
-    setup  "IdentifyRelatedDomains", topic: "sample"
-    input  trigger: "sample"
-    expect emits: ["Mused", "RelatedDomainsIdentified", "Sensed", "Recognized", "AttentionDirected", "IntentionFormed", "Observed", "SelfModelUpdated"]
-  end
-
-  test "RecordMusing sets sensations + patterns + focus + intention + observation + insight" do
-    tests "RecordMusing", on: "Musing", kind: :cross_cascade
-    setup  "MuseOnState", trigger: "sample"
-    input  sensations: "sample", patterns: "sample", focus: "sample", intention: "sample", observation: "sample", insight: "sample"
-    expect sensations: "sample", patterns: "sample", focus: "sample", intention: "sample", observation: "sample", insight: "sample"
-  end
-
+  # Musing aggregate retired 2026-05-08 — MuseOnState / RecordMusing
+  # cross-cascade tests removed. The Musing aggregate, the Mused/
+  # MusingRecorded events, and the dependent SenseOnMusing /
+  # DomainAwarenessOnResponse / RecordOnReflection / EncodeOnMusing
+  # policies were all retired together.
 
   # ── Announcement aggregate ──────────────────────────────────────────
 

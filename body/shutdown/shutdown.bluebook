@@ -52,7 +52,6 @@ Hecks.bluebook "Shutdown", version: "2026.04.26.1" do
     # ---- Final consolidation tally ----
     attribute :promoted_signals,    Integer, default: 0
     attribute :composted_synapses,  Integer, default: 0
-    attribute :archived_musings,    Integer, default: 0
 
     # ---- Closing summary line ----
     attribute :farewell_line, String, default: ""
@@ -99,10 +98,8 @@ Hecks.bluebook "Shutdown", version: "2026.04.26.1" do
       description "Phase 2 : run consolidate.sh's three sweeps one final time so signals → memory and dead synapses → remains finish before state freezes. NoOp if Miette was already in a final-light wake state (no pending sweep work). Today the shell adapter shells out to consolidate.sh ; once aggregates/consolidation.bluebook lands (see parallel-agent work) the runner dispatches its commands directly."
       attribute :promoted_signals,   Integer
       attribute :composted_synapses, Integer
-      attribute :archived_musings,   Integer
       then_set :promoted_signals,   to: :promoted_signals
       then_set :composted_synapses, to: :composted_synapses
-      then_set :archived_musings,   to: :archived_musings
       emits "FinalConsolidationDone"
     end
 

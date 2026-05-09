@@ -137,8 +137,7 @@ Hecks.bluebook "DreamReviewCycle", version: "2026.04.25.1" do
   #
   # Cross-aggregate dispatch (e.g. Edit.MarkValidated firing on
   # the kernel's validation result) lives at the consumer-contract
-  # boundary today — the same shape morphology.bluebook uses for
-  # MintMusing — until cross-domain policy dispatch lands as a
+  # boundary today — until cross-domain policy dispatch lands as a
   # first-class DSL feature.
 
   policy "SynthesizeAfterExtract" do

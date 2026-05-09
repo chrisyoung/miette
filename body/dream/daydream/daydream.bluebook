@@ -211,8 +211,8 @@ Hecks.bluebook "Daydream", version: "2026.04.26.1" do
 
   # Two outgoing edges from OverlapFound — AbortIfNoOverlap fires
   # only when :shared == "" (its given gates it) ; BuildImpression
-  # fires when :shared != "". Same shape as MusingMint's skip vs
-  # persist branch.
+  # fires when :shared != "". Same skip-vs-persist branch shape
+  # MusingMint used before its retirement (2026-05-08).
   policy "AbortOnNoOverlap" do
     on "OverlapFound"
     trigger "AbortIfNoOverlap"

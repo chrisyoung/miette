@@ -194,7 +194,7 @@ end
 # Runtime gaps that stay open after this PM lands :
 #   - Awareness.RecordMoment's 13-attr cross-store fill
 #     (Mind PM territory ; needs `with_attrs` policy primitive)
-#   - Daydream / musing / mint pipelines (sibling agent scope)
+#   - Daydream pipeline (sibling agent scope)
 #   - Wake-hook detection (already covered by InterpretDreamOnWake
 #     + ProduceWakeReportOnWake policies in mindstream.bluebook)
 #

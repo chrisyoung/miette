@@ -102,19 +102,17 @@ Hecks.behaviors "BodyDream" do
 
   test "GatherSeeds stamps the full seed bundle" do
     tests "GatherSeeds", on: "Dream"
-    input  musings_seed: "morning coffee thought",
-           recent_dreams_seed: "last night's wave reading",
+    input  recent_dreams_seed: "last night's wave reading",
            body_state_seed: "tired ; carrying tomorrow",
            vow_tensions_seed: "silence-while-i-talk",
            commits_today_seed: "9e928778 : i497 session continuation",
-           seeds: "vow:silence-while-i-talk, musing:morning-coffee",
+           seeds: "vow:silence-while-i-talk",
            carrying: "the boundary cleanup just landed"
-    expect musings_seed: "morning coffee thought",
-           recent_dreams_seed: "last night's wave reading",
+    expect recent_dreams_seed: "last night's wave reading",
            body_state_seed: "tired ; carrying tomorrow",
            vow_tensions_seed: "silence-while-i-talk",
            commits_today_seed: "9e928778 : i497 session continuation",
-           seeds: "vow:silence-while-i-talk, musing:morning-coffee",
+           seeds: "vow:silence-while-i-talk",
            carrying: "the boundary cleanup just landed",
            emits: ["SeedsGathered"]
   end

@@ -8,7 +8,7 @@ Hecks.bluebook "MindstreamCapability", version: "2026.04.26.1" do
   #
   # The mindstream is the body's 1Hz tick — the loop that paces
   # consolidation, awareness recording, dream pulses, wake hooks,
-  # daydreams and musing surfacing. Historically (PR #272 onward)
+  # and daydreams. Historically (PR #272 onward)
   # this lived as ~210 lines of bash in mindstream.sh ; this
   # capability declares the same shape as bluebook so the runtime
   # owns the orchestration and the shell becomes a thin adapter
@@ -179,11 +179,6 @@ Hecks.bluebook "MindstreamCapability", version: "2026.04.26.1" do
   #     EmitPulseOnTick + the BodyPulse subscribers (consolidate,
   #     prune, display, refresh-mood) already cascade from Ticked.
   #
-  #   - capabilities/musings/musings.bluebook — surface_musing,
-  #     mint_musing : the musing cluster owns its own cadence and
-  #     the daemon delegates via `hecks-life run` (today : shell
-  #     wrappers, to retire as the cluster bluebook absorbs them).
-  #
   #   - capabilities/dream_interpretation/dream_interpretation.bluebook —
   #     ReadDreamImages → IdentifyThemes → SynthesizeInterpretation
   #     fires from this capability's InterpretDreamOnWake policy.
@@ -209,9 +204,8 @@ Hecks.bluebook "MindstreamCapability", version: "2026.04.26.1" do
   #      moves above BodyPulse.
   #   3. The cross-aggregate awareness-snapshot dispatch. Will
   #      retire when policy with_attrs lands.
-  #   4. Detached-dispatch of capability shells (mint_musing,
-  #      daydream, etc.) until their cluster bluebooks absorb
-  #      their cadences.
+  #   4. Detached-dispatch of capability shells (daydream, etc.)
+  #      until their cluster bluebooks absorb their cadences.
   #
   # All four are filed as inbox runtime gaps. The shell shrinks
   # from ~210 lines to under 60.

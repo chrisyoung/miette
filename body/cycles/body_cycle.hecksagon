@@ -14,7 +14,7 @@ Hecks.hecksagon "BodyCycle" do
   # instance's correlation_id + state + last_event across restarts
   # (see rust/src/runtime/pm_engine.rs `load_persisted` /
   # `persist_instance`). No `:llm` adapter — LLM lives in
-  # Dream / LucidDream / MusingMint, not in the cycle scheduler.
+  # Dream / LucidDream, not in the cycle scheduler.
 
   adapter :heki                       # cross-process PM state persistence
 end
