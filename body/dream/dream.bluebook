@@ -129,7 +129,7 @@ Hecks.bluebook "BodyDream", version: "2026.05.02.1" do
       #   can sweep them. Per-source query rollout is the i222-followon
       #   work ; this PM ships with Musing as the seed-source floor.
 
-      dispatch "DreamSeed.PlantSeed", for_each: { from: "Musing.recent" }, with: { image: from_iter(:idea) }
+      dispatch "DreamSeed.PlantSeed", for_each: { from: "Musings.Musing.recent" }, with: { image: from_iter(:idea) }
     end
 
     # ----- First REM tick : seeds activate, generation begins ------
