@@ -1,0 +1,100 @@
+Hecks.behaviors "SystemPromptAssembly" do
+  vision "Behavioral parallel of tests/voice_and_sleep_lockdown.sh — the i50/i52 character-and-voice drift guard. The shell asserts sections + French vocabulary anchors land in the rendered system_prompt.md template, and that rem_branch.sh / nrem_branch.sh stay retired into the bluebook DreamInterpretation chain. This file is the destination shape : when the .behaviors runner can assert section-list membership + template content presence, the lockdown shell retires."
+
+  # ── Section A : system_prompt sections present in assembly ─────
+  # The shell greps the rendered miette_prompt.md.template for four
+  # section headings : Words-match-state (i52), I-think-in-French
+  # (i50), What-dreams-are-about (i52), Wake-ritual (i52). The
+  # SystemPromptAssembly bluebook DECLARES each as a `section` block
+  # with a (source, template) pair — that declaration is the contract
+  # the rendered template must honour. The behaviors below assert each
+  # section's :template lookup resolves through AssembleMarkdown.
+  #
+  # UNCOVERED today : the .behaviors DSL has no shape for "this
+  # bluebook declares a section named X" — that's a parse-tree
+  # assertion, one level above command dispatch. The cascading
+  # AssembleMarkdown test below proves the pipeline runs to
+  # MarkdownAssembled, but doesn't peek inside :rendered_text to
+  # confirm a specific heading made it through. Closing this gap
+  # needs either a kind: :ir scenario block or a substring-matcher
+  # for emitted state — both are i499 follow-ups.
+
+  test "RenderSystemPrompt births the pipeline into resolving" do
+    tests "RenderSystemPrompt", on: "PromptRender"
+    input  being: "Miette", output_path: "information/system_prompt.md"
+    expect being: "Miette", output_path: "information/system_prompt.md", phase: "resolving", emits: ["SystemPromptRenderRequested"]
+  end
+
+  test "AssembleMarkdown stamps section_count + rendered_text" do
+    # PENDING : the lifecycle gate on AssembleMarkdown requires
+    # phase: "assembling", which only LoadSectionTemplates can set.
+    # Walking there via setup commands would require chaining seven
+    # isolated dispatches (Resolve → LoadIdentity → LoadVows →
+    # LoadPsychicLink → LoadDispositions → LoadWakeRitual →
+    # LoadGrammar → LoadSectionTemplates), and the runner has no
+    # cascading-setup form. Closing this gap needs either a setup
+    # variant that cascades (i499) or a `kind: :ir` parse-tree
+    # assertion on the section list. The cross_cascade test below
+    # exercises the same emit (MarkdownAssembled) end-to-end.
+    tests "AssembleMarkdown", on: "PromptRender", kind: :pending
+    expect ok: "true"
+  end
+
+  test "RenderSystemPrompt cascades to SystemPromptRendered through the pipeline" do
+    # Mirrors shell section A — rendering produces the assembled
+    # markdown that the shell then greps for the four character
+    # sections. Cross-cascade asserts the full chain fires ;
+    # content-level assertions (heading presence, French vocab) are
+    # UNCOVERED below.
+    tests "RenderSystemPrompt", on: "PromptRender", kind: :cross_cascade
+    input  being: "Miette", output_path: "information/system_prompt.md"
+    expect emits_subset: ["SystemPromptRenderRequested", "OutputPathResolved", "IdentityLoaded", "VowsLoaded", "PsychicLinkLoaded", "DispositionsLoaded", "WakeRitualLoaded", "GrammarLoaded", "SectionTemplatesLoaded", "MarkdownAssembled", "FileWritten", "SystemPromptRendered"]
+  end
+
+  # ── UNCOVERED — content-presence + retirement assertions ─────────
+  #
+  # UNCOVERED : "## Words match state" heading present in rendered
+  #             template. Shell : `grep -qF "## Words match state"
+  #             miette_prompt.md.template`. Behaviors form would
+  #             need a `expect rendered_text_contains: "..."` matcher
+  #             that peeks into the AssembleMarkdown output. The
+  #             section IS declared in the bluebook (section "Words
+  #             match state") ; the assertion that the declaration
+  #             survives rendering is parse-tree level.
+  #
+  # UNCOVERED : "## I think in French" heading present (i50). Same
+  #             shape as above. Section declared as section "I think
+  #             in French" with :french_block template ; rendering
+  #             survival is parse-tree level.
+  #
+  # UNCOVERED : "## What dreams are about" heading present (i52).
+  #             Same shape. Section declared as section "What dreams
+  #             are about" with :dream_content_block template.
+  #
+  # UNCOVERED : "## Wake ritual" heading present (i52). Same shape.
+  #             Section declared as section "Wake ritual" with
+  #             :wake_ritual_block template, sourced from
+  #             :WakeRitualStep.
+  #
+  # UNCOVERED : French vocabulary anchors — Barthes, Bachelard, voilà,
+  #             alors, pardon, intérieure. Shell greps the template
+  #             for each phrase. These live in the disposition.heki
+  #             rows + french_block template — neither aggregate
+  #             state nor an emitted event. Closing this needs heki-
+  #             content inspection (Disposition rows match a regex)
+  #             or rendered_text substring matching. Same gap as the
+  #             section-heading assertions above.
+  #
+  # UNCOVERED : rem_branch.sh stays retired. Shell asserts the FILE
+  #             is absent from the body/ tree — the dream-content arc
+  #             retired into the DreamInterpretation chain (i220).
+  #             File-system-absence assertions are not a behavior of
+  #             any aggregate ; they're a repo-shape contract closer
+  #             to the antibody hook. UNCOVERED in .behaviors form by
+  #             design — see i242 for re-establishing drift guards
+  #             against the bluebook DreamInterpretation side.
+  #
+  # UNCOVERED : nrem_branch.sh stays retired. Same shape as
+  #             rem_branch.sh — file absence on disk, not a command
+  #             dispatch. Lives in the antibody/repo-shape layer.
+end

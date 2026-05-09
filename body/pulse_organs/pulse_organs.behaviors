@@ -1,0 +1,97 @@
+Hecks.behaviors "BodyPulseOrgans" do
+  vision "Behavioral parallel of tests/pulse_organs_smoke.sh — the Pulse process_manager that retired body/pulse_organs.sh (i75). Each BodyPulse self-loops the running PM into the four organ-step dispatches (Synapse / Signal / Focus / Remains) ; the runtime walks the bluebook, no shell."
+
+  # ── Pulse PM fan-out — one BodyPulse, four organ dispatches ──
+  # The shell smoke boots `hecks-life run-loop` against an isolated
+  # tmpdir, emits BodyPulse:Pulse:pulse at 1s cadence for ~10 ticks,
+  # then asserts every organ heki has ≥1 record. Each cross_cascade
+  # test below proves one of the four PM dispatches lands its event.
+  #
+  # i499 Phase A : when the .behaviors runner can follow PM
+  # dispatches and assert on emitted events, this file becomes
+  # enforcement and pulse_organs_smoke.sh retires.
+
+  test "BodyPulse fans out to Synapse.CreateSynapse" do
+    # Per-tick the PM dispatches CreateSynapse for the carrying topic.
+    # Counter-minted ids accumulate one new synapse per tick — synapse
+    # heki grows. The shell asserts via synapse.heki record count ≥1.
+    # `emits_subset` because the combined-domain BodyPulse cascade
+    # also fires sibling-bluebook policies (Display, Awareness, etc.) ;
+    # the PM's Synapse dispatch is the load-bearing assertion here.
+    tests "Emit", on: "Pulse", kind: :cross_cascade
+    expect emits_subset: ["BodyPulse", "SynapseCreated"]
+  end
+
+  test "BodyPulse fans out to Signal.FireSignal (somatic)" do
+    # First of two FireSignal dispatches : kind=somatic, payload=pulse.
+    # Singleton-upserts today (filed runtime gap : append-mode dispatch) ;
+    # the shell asserts via signal.heki record count ≥1. We assert two
+    # SignalFired events appear in order (somatic + concept) since the
+    # PM dispatches FireSignal twice per tick.
+    tests "Emit", on: "Pulse", kind: :cross_cascade
+    expect emits_subset: ["BodyPulse", "SignalFired", "SignalFired"]
+  end
+
+  test "BodyPulse fans out to Signal.FireSignal (concept)" do
+    # Second FireSignal dispatch : kind=concept, payload=carrying.
+    # Same singleton-upsert behavior as somatic ; same heki store ;
+    # the shell's ≥1 assertion is satisfied by either fire. The pair
+    # of SignalFired events is the proof both dispatches land — the
+    # somatic test above asserts the same shape ; this one names the
+    # concept fire as the second of the two for documentation.
+    tests "Emit", on: "Pulse", kind: :cross_cascade
+    expect emits_subset: ["BodyPulse", "SignalFired", "SignalFired"]
+  end
+
+  test "BodyPulse fans out to Focus.SetFocus" do
+    # Singleton (identified_by :name). Stamps target + weight +
+    # updated_at each tick. The shell asserts via focus.heki record
+    # count ≥1 ; SetFocus's then_set lands the row on first tick.
+    tests "Emit", on: "Pulse", kind: :cross_cascade
+    expect emits_subset: ["BodyPulse", "FocusSet"]
+  end
+
+  test "BodyPulse fans out to Remains.RecordRemains" do
+    # Keyed by :from_synapse. Today the PM stamps a placeholder remains
+    # row each tick ; the shell asserts via remains.heki record count
+    # ≥1. The synapse-just-died path that pulse_organs.sh captured
+    # awaits per-record fan-out (filed gap in pulse_organs.bluebook).
+    tests "Emit", on: "Pulse", kind: :cross_cascade
+    expect emits_subset: ["BodyPulse", "RemainsRecorded"]
+  end
+
+  # UNCOVERED : "ten BodyPulse ticks at 1s cadence drive run-loop"
+  # — the shell harness boots `hecks-life run-loop --every 1s --emit
+  # BodyPulse:Pulse:pulse`, sleeps 10.5s, then asserts. The cadence
+  # primitive (--every) is a CLI loop-driver concern, not a behavioral
+  # one ; per-tick effects are covered by the cross_cascade tests above.
+  # Filed under i499 Phase A : runner support for the loop primitive
+  # itself (sibling to body_cycles_smoke.behaviors' :pending tests).
+
+  # UNCOVERED : "after N ticks every organ heki has ≥1 record at once"
+  # — the shell's whole-system snapshot reads four sibling stores after
+  # the loop completes. The .behaviors `expect emits: [...]` form
+  # asserts an event sequence per cascade ; it has no shape for "after
+  # N root events, assert state in M sibling stores at once". The five
+  # tests above split that snapshot into per-organ cascades — adequate
+  # as regression coverage but not byte-identical to the shell's
+  # cross-store assertion.
+
+  # UNCOVERED : process-group / daemon-isolation guarantees — the
+  # shell's `set -m` + `trap kill -- -$$` ensure the run-loop daemon
+  # can't survive into the next test. The .behaviors runner is
+  # in-process by design ; daemon lifecycle is the shell's concern,
+  # not behavioral.
+
+  # UNCOVERED : "*.world heki { dir ... } pins the data dir" + the
+  # HECKS_INFO override path the shell uses. World resolution + env
+  # overrides are runtime-resolution properties, not aggregate
+  # behavior ; the per-aggregate tests above presume the runner
+  # already resolved the heki dir correctly.
+
+  # UNCOVERED : per-record fan-out (decay across all alive synapses,
+  # append-mode FireSignal, compost-driven Remains capture) — the
+  # filed runtime gaps documented in pulse_organs.bluebook's header.
+  # Until those primitives land, the shell's ≥1 floor is the proof
+  # surface ; behavior testing the gap itself is out of scope.
+end

@@ -1,0 +1,192 @@
+Hecks.behaviors "BodyDream" do
+  vision "Behavioral parallel of tests/dream_content_smoke.sh — the Dream PM (i220 / rem_branch.sh retirement) and its Dream aggregate cascade. Verifies the PM is born on SleepEntered (drawing seeds from Musing.recent), transitions through incubating → generating on RemEntered, dispatches Dream.ProduceImage + Body.RecordDreamPulse per PhaseElapsed, and the :llm cascade (i220-1 / i228) lands text_fr (and optionally text_en) on the Dream singleton."
+
+  # ── Dream PM — birth + state transitions ────────────────────────
+  # All PM birth + transition tests are :pending. The behaviors runner
+  # only knows command dispatch (`rt.dispatch_isolated(name, attrs)`) ;
+  # PMs observe events, not commands. There is no `kind: :process_manager`
+  # mode that lets a behaviors test inject SleepEntered / RemEntered /
+  # PhaseElapsed / DeepEntered / WokenUp into the runtime so the Dream
+  # PM can observe it. Same gap the Consolidation PM lives with
+  # (body/sleep/consolidation/consolidation.behaviors). Closing this
+  # requires a `kind: :process_manager` arm in
+  # rust/src/behaviors_runner.rs that emits an event onto rt.event_bus
+  # and lets PM handlers fire — plus a way to read PM-instance state
+  # (the runner's `find` only walks aggregate repos, not pm_engine
+  # instances).
+
+  test "SleepEntered births the PM into incubating" do
+    tests "SleepEntered", on: "Dream", kind: :pending
+    expect state: "incubating"
+    # UNCOVERED : behaviors runner has no event-injection path for PMs ;
+    #             SleepEntered is an event, not a Dream command.
+    #             Smoke covers via run-loop --emit SleepEntered:Consciousness:consciousness.
+  end
+
+  test "RemEntered transitions incubating to generating (cycle 1)" do
+    tests "RemEntered", on: "Dream", kind: :pending
+    setup  "SleepEntered"
+    expect state: "generating"
+    # UNCOVERED : same gap — events as setup not supported by runner.
+  end
+
+  test "RemEntered transitions dormant to generating (cycles 2-8)" do
+    tests "RemEntered", on: "Dream", kind: :pending
+    setup  "SleepEntered"
+    setup  "RemEntered"
+    setup  "DeepEntered"
+    setup  "PhaseElapsed"
+    expect state: "generating"
+    # UNCOVERED : same gap — events as setup not supported by runner.
+  end
+
+  test "DeepEntered fades the generating PM" do
+    tests "DeepEntered", on: "Dream", kind: :pending
+    setup  "SleepEntered"
+    setup  "RemEntered"
+    expect state: "fading"
+    # UNCOVERED : same gap — events as setup not supported by runner.
+  end
+
+  test "PhaseElapsed in fading drops the PM to dormant" do
+    tests "PhaseElapsed", on: "Dream", kind: :pending
+    setup  "SleepEntered"
+    setup  "RemEntered"
+    setup  "DeepEntered"
+    expect state: "dormant"
+    # UNCOVERED : same gap — events as setup not supported by runner.
+  end
+
+  test "WokenUp closes the PM" do
+    tests "WokenUp", on: "Dream", kind: :pending
+    setup  "SleepEntered"
+    expect state: "dormant"
+    # UNCOVERED : same gap — events as setup not supported by runner.
+  end
+
+  # ── PM seed sweep — DreamSeed.PlantSeed for_each Musing.recent ──
+  # Same pending shape : SleepEntered is an event, not a command, and
+  # the dispatches_subset assertion is also not a recognised behaviors
+  # runner key (it falls through to plain attribute equality and fails).
+  # The shell smoke covers this via run-loop --emit SleepEntered + a
+  # heki-growth assertion on dream_seed.heki after the i221-A for_each
+  # walks Musings.Musing.recent.
+
+  test "SleepEntered sweeps Musing.recent into DreamSeed.PlantSeed" do
+    tests "SleepEntered", on: "Dream", kind: :pending
+    expect state: "incubating", dispatches_subset: ["DreamSeed.PlantSeed"]
+    # UNCOVERED : event-injection gap + dispatches_subset assertion
+    #             unsupported by behaviors_runner.rs (no PM observation
+    #             of dispatched commands). Smoke covers via run-loop +
+    #             dream_seed.heki growth past the seeded-Musing floor.
+  end
+
+  # ── PM per-tick generating loop ─────────────────────────────────
+  # Same pending shape — PhaseElapsed is an event the PM observes, not
+  # a command the runner can dispatch into Dream, and dispatches_subset
+  # isn't a recognised assertion. Smoke reports both Dream.ProduceImage
+  # (eventual DreamImageRequested) and Body.RecordDreamPulse, the latter
+  # of which has its own forward-reference gap (Body aggregate isn't
+  # defined as a real bluebook aggregate today — flagged below as a
+  # named smoke gap too).
+
+  test "PhaseElapsed in generating dispatches ProduceImage + RecordDreamPulse" do
+    tests "PhaseElapsed", on: "Dream", kind: :pending
+    setup  "SleepEntered"
+    setup  "RemEntered"
+    expect state: "generating", dispatches_subset: [
+      "Dream.ProduceImage",
+      "Body.RecordDreamPulse"
+    ]
+    # UNCOVERED : same gap — runner can't drive PMs through events ;
+    #             dispatches_subset unsupported ; Body forward-ref.
+  end
+
+  # ── Dream aggregate — RecordImage lands the :llm response ───────
+  # Mirrors smoke gap3 : the :dream_image adapter (trigger_on
+  # Dream.ProduceImage in body/dream/dream.hecksagon) cascades a
+  # French sentence into Dream.RecordImage(text_fr:). A second
+  # adapter, :dream_translate, response_into RecordImage(text_en:).
+  # These tests cover the aggregate-level RecordImage shape ; the
+  # adapter cascade itself is UNCOVERED below.
+
+  test "RecordImage sets text_fr" do
+    tests "RecordImage", on: "Dream"
+    input  text_fr: "sample"
+    expect text_fr: "sample", emits: ["DreamImageRecorded"]
+  end
+
+  test "RecordImage sets text_en" do
+    tests "RecordImage", on: "Dream"
+    input  text_en: "sample"
+    expect text_en: "sample", emits: ["DreamImageRecorded"]
+  end
+
+  test "RecordImage sets both text_fr and text_en together" do
+    tests "RecordImage", on: "Dream"
+    input  text_fr: "sample-fr", text_en: "sample-en"
+    expect text_fr: "sample-fr", text_en: "sample-en"
+  end
+
+  test "ProduceImage stamps sleep_cycle" do
+    tests "ProduceImage", on: "Dream"
+    input  sleep_cycle: 1
+    expect sleep_cycle: 1, emits: ["DreamImageRequested"]
+  end
+
+  test "PlantSeeds stamps seeds and carrying" do
+    tests "PlantSeeds", on: "Dream"
+    input  seeds: "sample-seeds", carrying: "sample-carrying"
+    expect seeds: "sample-seeds", carrying: "sample-carrying", emits: ["DreamSeedsPlanted"]
+  end
+
+  # ── UNCOVERED — runtime-level smoke assertions ──────────────────
+  #
+  # UNCOVERED : dream_seed.heki growth via for_each Musings.Musing.recent —
+  #             the smoke seeds 5 musings then counts dream_seed
+  #             records on disk after a real run-loop tick. .behaviors
+  #             tests reach into in-memory state + dispatched commands ;
+  #             they don't observe persisted heki rows produced by the
+  #             receiving DreamSeed aggregate. Covered today only by
+  #             the shell smoke. Same i499 follow-up as consolidation.
+  #
+  # UNCOVERED : :llm cascade lands text_fr on Dream singleton (gap3,
+  #             i220-3) — the smoke runs HECKS_LLM_PROVIDER=test, fires
+  #             real PhaseElapsed events, and reads the Dream
+  #             singleton's text_fr from body_dream/dream.heki after
+  #             the cascade drains. Behaviors today scope to a single
+  #             aggregate's command-step ; they don't drive the
+  #             :dream_image adapter (trigger_on Dream.ProduceImage)
+  #             or its response_into chain into Dream.RecordImage.
+  #             Closing this requires a kind: :adapter_cascade scenario
+  #             block in the runner.
+  #
+  # UNCOVERED : :dream_translate French → English chain — same shape
+  #             as the gap above ; the adapter response_into
+  #             RecordImage(text_en:) is observable only after a real
+  #             run-loop drain. Smoke reports text_en but doesn't
+  #             gate on it ; same i228 chain-trigger gap.
+  #
+  # UNCOVERED : Body.RecordDreamPulse / consciousness.dream_pulses
+  #             growth — the smoke reports pulse delta but doesn't
+  #             assert it. Body aggregate is a forward-ref (referenced
+  #             by the PM, not yet defined as a real aggregate) ;
+  #             same gap as the smoke. Filed on the rem_branch.sh
+  #             retirement arc. Once Body.RecordDreamPulse is
+  #             defined (or PM is retargeted to Consciousness.DreamPulse),
+  #             a `dispatches_subset` assertion above + a Body
+  #             aggregate behavior test gate it.
+  #
+  # UNCOVERED : run-loop boot success / parse-failure guard — the
+  #             smoke greps run_loop.log for the startup banner +
+  #             panic / RuntimeError markers. .behaviors live downstream
+  #             of parse (the suite itself is the parse proof) ;
+  #             runtime boot health is a CLI-level concern, not a
+  #             behavior.
+  #
+  # UNCOVERED : lucid path (LucidDream.ObserveDream / SteerDream) —
+  #             the smoke explicitly defers this on the same i228
+  #             chain-trigger gap. Per-aggregate coverage already
+  #             lives in lucid_dream.behaviors ; the cascade-from-PM
+  #             surface waits for the runner.
+end

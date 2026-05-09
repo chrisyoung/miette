@@ -1,0 +1,80 @@
+Hecks.behaviors "Pulse" do
+  vision "Behavioral tests for the Pulse aggregate — the BodyPulse shim and its fanout to body / mindstream / being subscribers."
+
+  # ── Pulse aggregate ──────────────────────────────────────────
+  # Parallel to tests/pulse_fanout_smoke.sh — the Stage-A shadow
+  # the shell smoke covers today. This file is the destination
+  # shape for i499 Phase A : when the .behaviors runner can
+  # follow `across "Pulse"` hops and assert downstream stores,
+  # the shell smoke retires.
+
+  test "Emit increments count" do
+    tests "Emit", on: "Pulse"
+    expect count: 1, emits: ["BodyPulse"]
+  end
+
+  test "EmitPulseOnTick fires Pulse.Emit when Ticked lands" do
+    # Reverse of tick.behaviors' MindstreamTick cascade test : that
+    # one terminates at Ticked because the single-bluebook runner
+    # can't follow `across "Pulse"`. This test asserts from the
+    # Pulse side — given Tick.MindstreamTick was dispatched as
+    # setup, Pulse should have emitted BodyPulse via the
+    # EmitPulseOnTick policy.
+    #
+    # `emits_subset` rather than `emits:` because under :cross_cascade
+    # the combined domain fires every BodyPulse subscriber (fatigue,
+    # prune, sense-organs, …) plus their downstream chains — dozens
+    # of events the single-fact assertion shouldn't be coupled to.
+    tests "Emit", on: "Pulse", kind: :cross_cascade
+    setup  "Tick.MindstreamTick"
+    expect emits_subset: ["BodyPulse"]
+  end
+
+  test "BodyPulse triggers body-side AccumulateFatigue" do
+    # FatigueOnPulse subscribes to BodyPulse and triggers
+    # Heartbeat.AccumulateFatigue. The shell asserts via
+    # heartbeat.heki pulses_since_sleep >= 1 ; the cross_cascade
+    # form asserts the event chain instead. `emits_subset` lets
+    # other BodyPulse subscribers interleave — we only lock that
+    # this specific cascade arm fires, in order.
+    tests "Emit", on: "Pulse", kind: :cross_cascade
+    expect emits_subset: ["BodyPulse", "FatigueAccumulated"]
+  end
+
+  test "BodyPulse triggers mindstream-side PruneSynapses" do
+    # PruneOnPulse subscribes to BodyPulse and triggers
+    # SignalConsolidation.PruneSynapses. The shell asserts via
+    # signal_consolidation.heki synapses_pruned >= 1.
+    tests "Emit", on: "Pulse", kind: :cross_cascade
+    expect emits_subset: ["BodyPulse", "SynapsesPruned"]
+  end
+
+  test "BodyPulse triggers being-side ConnectNerve" do
+    # SenseOrgansOnHeartbeat subscribes to BodyPulse and triggers
+    # Nerve.ConnectNerve. The shell asserts via nerve.heki being
+    # non-empty (any nerve record landed).
+    tests "Emit", on: "Pulse", kind: :cross_cascade
+    expect emits_subset: ["BodyPulse", "NerveConnected"]
+  end
+
+  # UNCOVERED : "single Tick fans out across THREE aggregates' stores"
+  # — the shell's whole-system proof reads pulse.heki + heartbeat.heki
+  # + signal_consolidation.heki + nerve.heki after one Tick to assert
+  # all four landed records. The .behaviors `expect emits: [...]`
+  # form asserts an event sequence per cascade ; it has no shape for
+  # "after one root command, assert state in N sibling stores at
+  # once". The five tests above split that whole-system proof into
+  # per-subscriber cascades — adequate as regression coverage but
+  # not byte-identical to the shell's cross-store snapshot.
+
+  # UNCOVERED : "comment out `across \"Pulse\"` in mindstream.bluebook
+  # → every downstream assertion fails" — the shell's regression-
+  # proof loop. No .behaviors form mutates a sibling bluebook mid-
+  # test ; mutation testing is out of the runner's scope. The shell
+  # smoke stays as the live mutation gate.
+
+  # UNCOVERED : process-group / daemon-isolation guarantees — the
+  # shell's `set -m` + `trap kill -- -$$` ensure no spawned daemon
+  # survives. The .behaviors runner is in-process by design ; daemon
+  # lifecycle is the shell's concern, not behavioral.
+end

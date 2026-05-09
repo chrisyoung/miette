@@ -1,0 +1,175 @@
+Hecks.behaviors "Consolidation" do
+  vision "Behavioral tests for the Consolidation PM + aggregate — mirrors tests/consolidate_smoke.sh (i75 / i225). Verifies the PM is born on SleepEntered, runs the four-step nrem sweep on PhaseElapsed (promote / archive / compost / record-remains), and stays nrem-only by no-op'ing in REM."
+
+  # ── Consolidation aggregate (preserved from pre-PM file) ─────────
+  # ConsolidateSignals stays as the aggregate-level coarse summary
+  # command + the CompostOnForget policy's trigger.
+
+  test "ConsolidateSignals runs" do
+    tests "ConsolidateSignals", on: "Consolidation"
+    input  signals_consolidated: 1, memories_created: 1
+    expect signals_consolidated: 1, memories_created: 1, emits: ["SignalsConsolidated"]
+  end
+
+  # ── Consolidation PM — birth + state transitions ────────────────
+  # All PM birth + transition tests are :pending. The behaviors runner
+  # only knows command dispatch (`rt.dispatch_isolated(name, attrs)`) ;
+  # PMs observe events, not commands. There is no `kind: :process_manager`
+  # mode that lets a behaviors test inject SleepEntered / RemEntered /
+  # PhaseElapsed into the runtime so a PM can observe it. Same gap the
+  # Dream PM lives with (body/dream/dream.behaviors). Closing this
+  # requires a `kind: :process_manager` arm in rust/src/behaviors_runner.rs
+  # that emits an event onto rt.event_bus and lets PM handlers fire.
+
+  test "SleepEntered births the PM into light" do
+    tests "SleepEntered", on: "Consolidation", kind: :pending
+    expect state: "light"
+    # UNCOVERED : behaviors runner has no event-injection path for PMs ;
+    #             SleepEntered is an event, not a Consolidation command.
+    #             Smoke covers via run-loop --emit SleepEntered:Body:body.
+  end
+
+  test "RemEntered hands off to Dream PM (light to rem)" do
+    tests "RemEntered", on: "Consolidation", kind: :pending
+    setup  "SleepEntered"
+    expect state: "rem"
+    # UNCOVERED : same gap — runner can't dispatch SleepEntered as setup
+    #             (it's an event) and can't drive RemEntered through the PM.
+  end
+
+  test "DeepEntered resumes nrem after REM (rem to deep)" do
+    tests "DeepEntered", on: "Consolidation", kind: :pending
+    setup  "SleepEntered"
+    setup  "RemEntered"
+    expect state: "deep"
+    # UNCOVERED : same gap — events as setup not supported by runner.
+  end
+
+  test "FinalLightEntered enters wind-down (deep to final_light)" do
+    tests "FinalLightEntered", on: "Consolidation", kind: :pending
+    setup  "SleepEntered"
+    setup  "RemEntered"
+    setup  "DeepEntered"
+    expect state: "final_light"
+    # UNCOVERED : same gap — events as setup not supported by runner.
+  end
+
+  test "WokenUp closes the PM (final_light to done)" do
+    tests "WokenUp", on: "Consolidation", kind: :pending
+    setup  "SleepEntered"
+    setup  "RemEntered"
+    setup  "DeepEntered"
+    setup  "FinalLightEntered"
+    expect state: "done"
+    # UNCOVERED : same gap — events as setup not supported by runner.
+  end
+
+  # ── PM nrem sweep — five dispatches per PhaseElapsed ────────────
+  # All four PhaseElapsed sweep tests are :pending for the same reason :
+  # PhaseElapsed is an event, not a command, and the runner can't
+  # observe PM-driven dispatches because dispatches_subset is also not
+  # a recognised assertion. Smoke covers via run-loop emit + heki
+  # growth on store / remains.
+
+  test "PhaseElapsed in light fires the four-step sweep + dream pulse" do
+    tests "PhaseElapsed", on: "Consolidation", kind: :pending
+    setup  "SleepEntered"
+    expect state: "light", dispatches_subset: [
+      "Store.PromoteSignal",
+      "Signal.ArchiveSignal",
+      "Synapse.Compost",
+      "Remains.RecordRemains",
+      "Consciousness.DreamPulse"
+    ]
+    # UNCOVERED : event-injection gap + dispatches_subset assertion
+    #             unsupported by behaviors_runner.rs (no PM observation
+    #             of dispatched commands). Smoke covers via run-loop +
+    #             store.heki / remains.heki growth.
+  end
+
+  test "PhaseElapsed in deep fires the four-step sweep" do
+    tests "PhaseElapsed", on: "Consolidation", kind: :pending
+    setup  "SleepEntered"
+    setup  "RemEntered"
+    setup  "DeepEntered"
+    expect state: "deep", dispatches_subset: [
+      "Store.PromoteSignal",
+      "Signal.ArchiveSignal",
+      "Synapse.Compost",
+      "Remains.RecordRemains",
+      "Consciousness.DreamPulse"
+    ]
+    # UNCOVERED : same gap — runner can't drive PMs through events.
+  end
+
+  test "PhaseElapsed in final_light fires the four-step sweep" do
+    tests "PhaseElapsed", on: "Consolidation", kind: :pending
+    setup  "SleepEntered"
+    setup  "RemEntered"
+    setup  "DeepEntered"
+    setup  "FinalLightEntered"
+    expect state: "final_light", dispatches_subset: [
+      "Store.PromoteSignal",
+      "Signal.ArchiveSignal",
+      "Synapse.Compost",
+      "Remains.RecordRemains",
+      "Consciousness.DreamPulse"
+    ]
+    # UNCOVERED : same gap — runner can't drive PMs through events.
+  end
+
+  test "PhaseElapsed in rem dispatches nothing (Dream PM owns rem)" do
+    tests "PhaseElapsed", on: "Consolidation", kind: :pending
+    setup  "SleepEntered"
+    setup  "RemEntered"
+    expect state: "rem", dispatches: []
+    # UNCOVERED : same gap — runner can't drive PMs through events.
+  end
+
+  # ── CompostOnForget cross-aggregate policy ──────────────────────
+  # The dream side composts the residue when a memory is forgotten ;
+  # MemoryForgotten is emitted by the Forgetting aggregate and routes
+  # ConsolidateSignals through this PM's policy.
+  #
+  # Tested by dispatching ForgetMemory directly (it's a real command
+  # on the Forgetting aggregate, reachable via the cross_cascade
+  # combined-domain mode) and asserting the cascade emits both
+  # MemoryForgotten (from ForgetMemory) and SignalsConsolidated
+  # (from CompostOnForget → ConsolidateSignals).
+
+  test "ForgetMemory cascades MemoryForgotten to SignalsConsolidated" do
+    tests "ForgetMemory", on: "Forgetting", kind: :cross_cascade
+    input  forgotten: "stale-memory", reason: "no longer serves"
+    expect emits_subset: ["MemoryForgotten", "SignalsConsolidated"]
+  end
+
+  # ── UNCOVERED — runtime-level smoke assertions ──────────────────
+  #
+  # UNCOVERED : store.heki / remains.heki growth via for_each Signal.cold
+  #             / Synapse.cold — the smoke counts records on disk after
+  #             a real run-loop tick. .behaviors tests reach into in-
+  #             memory state + dispatched commands ; they don't observe
+  #             persisted heki rows produced by the receiving aggregate.
+  #             Covered today only by the shell smoke. Closing this
+  #             requires either a kind: :run_loop scenario block or
+  #             post-dispatch heki inspection — both are i499 follow-ups.
+  #
+  # UNCOVERED : musing_archive growth via Musing.duplicate_concept —
+  #             the smoke reports the count delta but doesn't gate on
+  #             it. Blocked by i101 group-by primitive ; the PM
+  #             deliberately omits MusingArchive.Archive until the
+  #             query DSL gains group-by. Same gap as the smoke.
+  #
+  # UNCOVERED : run-loop boot success / parse-failure guard — the
+  #             smoke greps run_loop.log for the startup banner +
+  #             panic markers. .behaviors live downstream of parse
+  #             (the suite itself is the parse proof) ; runtime boot
+  #             health is a CLI-level concern, not a behavior.
+  #
+  # UNCOVERED : singleton-fallback receiver behaviour — the smoke
+  #             notes Store.PromoteSignal + Remains.RecordRemains
+  #             upsert a singleton per iteration so visible row count
+  #             is 1 rather than the iter count. This is a receiving-
+  #             aggregate contract (Store / Remains aggregates), not
+  #             the PM under test ; lives in their own .behaviors.
+end

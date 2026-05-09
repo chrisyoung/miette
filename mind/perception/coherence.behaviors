@@ -4,8 +4,46 @@ Hecks.behaviors "Coherence" do
   # ── Coherence aggregate ─────────────────────────────────────────
 
   test "RecordViolation captures Invariant 1 fact" do
+    # Invariant 1 : a refreshed mood is incompatible with an exhausted body.
+    # Shell case : mood=refreshed, fatigue_state=exhausted, pulses=1500.
     tests "RecordViolation", on: "Coherence"
-    input  invariant_number: 1, reason: "mood=refreshed but fatigue_state=tired"
+    input  invariant_number: 1, reason: "mood=refreshed but fatigue_state=exhausted"
+    expect emits: ["ViolationRecorded"]
+  end
+
+  test "RecordViolation captures Invariant 2 fact" do
+    # Invariant 2 : a sleeping consciousness cannot hold a refreshed mood.
+    # Shell case : consciousness=sleeping, mood=refreshed.
+    tests "RecordViolation", on: "Coherence"
+    input  invariant_number: 2, reason: "consciousness=sleeping but mood=refreshed"
+    expect emits: ["ViolationRecorded"]
+  end
+
+  test "RecordViolation captures Invariant 3 fact" do
+    # Invariant 3 : limber fatigue is impossible past the early pulse window —
+    # 1500 pulses is far off the limber rung of the ladder.
+    # Shell case : fatigue_state=limber, pulses_since_sleep=1500.
+    tests "RecordViolation", on: "Coherence"
+    input  invariant_number: 3, reason: "fatigue_state=limber but pulses_since_sleep=1500"
+    expect emits: ["ViolationRecorded"]
+  end
+
+  test "RecordViolation captures Invariant 4 fact" do
+    # Invariant 4 : tick.cycle must not advance faster than wall-clock time.
+    # Shell case : baseline saw cycle=10 a moment ago, current cycle=10000.
+    # UNCOVERED : the shell's tick-baseline file (.tick_baseline) seeding and
+    # wall-delta computation live entirely in the adapter — the aggregate
+    # only stores the post-hoc violation record, not the temporal arithmetic.
+    tests "RecordViolation", on: "Coherence"
+    input  invariant_number: 4, reason: "tick.cycle advanced 9990 ahead of wall clock"
+    expect emits: ["ViolationRecorded"]
+  end
+
+  test "RecordViolation captures Invariant 5 fact" do
+    # Invariant 5 : REM sleep stage must carry a lucid narrative.
+    # Shell case : sleep_stage=rem, is_lucid=yes, latest_narrative empty.
+    tests "RecordViolation", on: "Coherence"
+    input  invariant_number: 5, reason: "sleep_stage=rem but lucid_dream.latest_narrative empty"
     expect emits: ["ViolationRecorded"]
   end
 
