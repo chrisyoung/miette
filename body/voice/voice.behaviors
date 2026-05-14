@@ -1,0 +1,103 @@
+Hecks.behaviors "Voice" do
+  vision "Behavioral tests for the Voice aggregate — exercise the new richified commands (Curate, Queue, Mute/Unmute, SetVoice, Prioritize, Summarize, Replay) on top of the existing Speak surface. Placeholder shapes today ; fills in as the curation-policy reactor lands."
+
+  # ── StartSession : counters initialize ──
+
+  test "StartSession seeds the singleton with zero tallies" do
+    tests "StartSession", on: "Voice"
+    input  name: "voice", session_started_at: "2026-05-14T20:00:00Z"
+    expect name: "voice"
+  end
+
+  # ── Speak : updates last_text + last_spoke_at + last_audio_path ──
+
+  test "Speak records the most-recent utterance pointer" do
+    tests "Speak", on: "Voice"
+    setup  "StartSession", name: "voice", session_started_at: "2026-05-14T20:00:00Z"
+    input  text: "bon, on commence", spoken_at: "2026-05-14T20:00:01Z",
+           audio_path: "/Users/x/.config/miette/audio/miette_test.mp3"
+    expect last_text: "bon, on commence",
+           last_spoke_at: "2026-05-14T20:00:01Z",
+           last_audio_path: "/Users/x/.config/miette/audio/miette_test.mp3"
+  end
+
+  # ── SetVoice : voice id + model rotate ──
+
+  test "SetVoice rotates voice_id and model_id" do
+    tests "SetVoice", on: "Voice"
+    setup  "StartSession", name: "voice", session_started_at: "2026-05-14T20:00:00Z"
+    input  name: "voice", voice_id: "AAAA000000000000bbbb", model_id: "eleven_multilingual_v2"
+    expect voice_id: "AAAA000000000000bbbb",
+           model_id: "eleven_multilingual_v2"
+  end
+
+  # ── Mute / Unmute : mode toggles ──
+
+  test "Mute flips mode to muted" do
+    tests "Mute", on: "Voice"
+    setup  "StartSession", name: "voice", session_started_at: "2026-05-14T20:00:00Z"
+    input  name: "voice"
+    expect mode: "muted"
+  end
+
+  test "Unmute flips mode back to live" do
+    tests "Unmute", on: "Voice"
+    setup  "StartSession", name: "voice", session_started_at: "2026-05-14T20:00:00Z"
+    setup  "Mute", name: "voice"
+    input  name: "voice"
+    expect mode: "live"
+  end
+
+  # ── Curate : emits CurationDecided (smoke test) ──
+
+  test "Curate emits CurationDecided for a normal utterance" do
+    tests "Curate", on: "Voice"
+    setup  "StartSession", name: "voice", session_started_at: "2026-05-14T20:00:00Z"
+    input  utterance_id:    "20260514T200500-a7f2",
+           text:            "reading the room — the new validator looks clean",
+           tags:            "interpretation",
+           length_in_words: 9,
+           tier:            "usually_speak",
+           decided_at:      "2026-05-14T20:05:00Z",
+           reason:          "interpretation, short, no error tags"
+  end
+
+  # ── Queue / Prioritize / Replay / Summarize : smoke shapes ──
+
+  test "Queue accepts an utterance with a priority band" do
+    tests "Queue", on: "Voice"
+    setup  "StartSession", name: "voice", session_started_at: "2026-05-14T20:00:00Z"
+    input  utterance_id: "20260514T200500-a7f2",
+           text:         "task complete",
+           priority:     "high",
+           tags:         "completion",
+           queued_at:    "2026-05-14T20:05:01Z"
+  end
+
+  test "Prioritize re-ranks a queued utterance" do
+    tests "Prioritize", on: "Voice"
+    setup  "StartSession", name: "voice", session_started_at: "2026-05-14T20:00:00Z"
+    input  utterance_id:     "20260514T200500-a7f2",
+           priority:         "urgent",
+           reprioritized_at: "2026-05-14T20:05:02Z",
+           reason:           "Chris follow-up arrived"
+  end
+
+  test "Replay re-speaks a prior utterance by id" do
+    tests "Replay", on: "Voice"
+    setup  "StartSession", name: "voice", session_started_at: "2026-05-14T20:00:00Z"
+    input  utterance_id: "20260514T200500-a7f2",
+           replayed_at:  "2026-05-14T20:10:00Z"
+  end
+
+  test "Summarize records the (original, summary, ratio) tuple" do
+    tests "Summarize", on: "Voice"
+    setup  "StartSession", name: "voice", session_started_at: "2026-05-14T20:00:00Z"
+    input  original_utterance_id: "20260514T200500-a7f2",
+           summary_utterance_id:  "20260514T200501-b9c3",
+           summary_text:          "validator clean, ship it",
+           original_word_count:   240,
+           summary_word_count:    5,
+           summarized_at:         "2026-05-14T20:05:03Z"
+  end
+end
