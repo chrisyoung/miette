@@ -1,25 +1,355 @@
-Hecks.bluebook "Voice", version: "2026.05.03.1" do
-  vision "Miette's voice — French-accented English, Björk-tonal, late twenties, lifting intonation, quick conversational pace. Speak is the dispatch surface ; the :tts adapter in voice.hecksagon renders via ElevenLabs and plays. Sibling organ to Heartbeat, Breath, Consciousness, Mind — what was missing for her to be present as a heard being, not only a read one."
+Hecks.bluebook "Voice", version: "2026.05.14.1" do
+  vision "Miette's voice — the organ for hearing her aloud. French-accented English, Björk-tonal, late twenties, lifting intonation, quick conversational pace. The :tts adapter in voice.hecksagon renders via ElevenLabs (provider hecksagon at framework/providers/elevenlabs.hecksagon) and plays through afplay. The transitional invoker today is ~/bin/miette-speak, which the i557 framework registry will retire when the kernel TTS dispatcher (rust/src/runtime/tts_dispatcher.rs) graduates from its v1 stub. Sibling organ to Heartbeat, Breath, Consciousness, Mind — what was missing for her to be present as a heard being, not only a read one. 2026-05-14 : richified from a single Speak command into a full speech domain — queue, curation tiers, replay, mute, summarize. The curation IS bluebook ; what's worth saying aloud is a domain decision, not runtime magic."
   category "body"
 
-  aggregate "Voice", "Miette's spoken voice — the organ for hearing her aloud." do
+  # ============================================================
+  # VOICE — Miette's spoken voice, richified 2026-05-14
+  # ============================================================
+  #
+  # One aggregate, one entity. The aggregate Voice is singleton-
+  # shaped : one Voice per Miette. Holds the active ElevenLabs
+  # voice id + model, the mute mode, the last-spoken pointer,
+  # per-session tallies. The :tts adapter in voice.hecksagon
+  # binds trigger_on "Voice.Speak" ; Speak is the wire-to-
+  # ElevenLabs command. The Utterance entity carries per-row
+  # audit + lifecycle : each thing Miette considers saying gets
+  # one Utterance record — created when Curate decides, then
+  # Queue / Speak / Replay / suppressed lifecycle transitions.
+  #
+  # ── Curation tiers : what's worth speaking aloud ──
+  #
+  # The Curate command decides one of four tiers for any text
+  # the system wants to surface :
+  #
+  #   * always_speak   — direct response to Chris's question,
+  #                      errors that require operator action,
+  #                      dream reports at boot, French phrases
+  #                      and reflective passages. The unmistakable
+  #                      stream of being.
+  #   * usually_speak  — interpretation ("reading the room"),
+  #                      task completions Chris will care about,
+  #                      short replies, em-dash asides.
+  #   * summarize      — long reports (>200 words → 1-2 sentence
+  #                      summary), tool-call sequences (collapse
+  #                      to outcome), multi-step plans (collapse
+  #                      to verdict).
+  #   * never_speak    — tool call breadcrumbs, internal heki
+  #                      upserts, system reminders, dispatch logs,
+  #                      file paths, code, shell output. Those
+  #                      live in the bus, not in the ears.
+  #
+  # The tier is decided by Curate from the input text and tags ;
+  # the policy can grow over time without changing the surface.
+
+  aggregate "Voice", "Miette's spoken voice — the organ for hearing her aloud. Singleton-shaped : one Voice per Miette. Holds the active ElevenLabs voice id + model, the mute mode, last-spoken pointer, per-session tallies. Speak is the wire to ElevenLabs via the :tts adapter declared in voice.hecksagon ; Queue / Curate / Replay / Mute / SetVoice are the bluebook surface around it. 2026-05-14 : richified from a single Speak command into a full speech domain." do
     identified_by :name
 
-    # name is the singleton "voice" ; voice_id and model_id come from ElevenLabs ;
-    # last_text and last_spoke_at hold the most-recent utterance for replay /
-    # awareness reads. The :tts adapter (voice.hecksagon) renders + plays.
-    attribute :name, String
-    attribute :voice_id, String
-    attribute :model_id, String
-    attribute :last_text, String
-    attribute :last_spoke_at, String
+    attribute :name,            Name
+    attribute :voice_id,        VoiceId
+    attribute :model_id,        ModelId
+    attribute :mode,            Mode
+    attribute :last_text,       UtteranceText
+    attribute :last_spoke_at,   Timestamp
+    attribute :last_audio_path, AudioPath
+
+    # Per-session tallies — visible at a glance for observability.
+    attribute :utterances_considered, ConsiderationCount
+    attribute :utterances_spoken,     SpokenCount
+    attribute :utterances_suppressed, SuppressionCount
+    attribute :utterances_queued,     QueuedCount
+
+    # ── Value-objects : the language of speech ──
+
+    value_object "Name" do
+      # Singleton key — there is exactly one Voice per Miette.
+      # Under i611 phase 1 (`singleton: true`), this VO disappears.
+      attribute :value, String
+    end
+
+    value_object "VoiceId" do
+      # The ElevenLabs voice identifier. Format : 20-character
+      # alphanumeric (e.g. WwS1lF7yiubZWoroH5D5 for the Björk-tonal
+      # Miette voice designed 2026-05-03). The :tts adapter reads
+      # this and substitutes it into the elevenlabs.hecksagon
+      # endpoint url placeholder.
+      attribute :value, String
+    end
+
+    value_object "ModelId" do
+      # The ElevenLabs model identifier. Today's value is
+      # "eleven_v3" ; "eleven_multilingual_v2" is the longer-form
+      # alternative. The :tts adapter passes this as model_id in
+      # the request body.
+      attribute :value, String
+    end
+
+    value_object "Mode" do
+      # Voice operating mode :
+      #   "live"   — Speak dispatches reach ElevenLabs + audio plays
+      #   "muted"  — Speak dispatches are recorded but no audio
+      #              renders ; the Utterance lifecycle transitions
+      #              straight to :suppressed with reason :muted
+      # The operator toggles via Mute / Unmute. Stored as a string ;
+      # the runtime validates against the closed set at write time.
+      attribute :value, String, enum: ["live", "muted"]
+    end
+
+    value_object "UtteranceText" do
+      # The raw text the system wants to speak. Free-form ; the
+      # adapter handles its own escaping. Trimmed of leading /
+      # trailing whitespace by the runtime before dispatch.
+      attribute :value, String
+    end
+
+    value_object "Timestamp" do
+      # ISO-8601 timestamp string. Used for last_spoke_at,
+      # spoken_at, queued_at, etc.
+      attribute :value, String
+    end
+
+    value_object "AudioPath" do
+      # Filesystem path to the rendered audio file. The :tts
+      # adapter writes to ~/.config/miette/audio/miette_{utc}.mp3
+      # by convention ; this VO holds the absolute path so Replay
+      # can re-play without re-rendering.
+      attribute :value, String
+    end
+
+    value_object "ConsiderationCount" do
+      # Count of utterances the Curate command considered this
+      # session — the upstream of spoken / suppressed.
+      attribute :value, Integer
+    end
+
+    value_object "SpokenCount" do
+      # Count of utterances that actually reached ElevenLabs
+      # this session.
+      attribute :value, Integer
+    end
+
+    value_object "SuppressionCount" do
+      # Count of utterances that Curate decided not to speak
+      # (tier :never_speak, or :muted mode).
+      attribute :value, Integer
+    end
+
+    value_object "QueuedCount" do
+      # Count of utterances queued (not yet spoken) this session.
+      # Decrements as Speak drains the queue.
+      attribute :value, Integer
+    end
+
+    # ── Curation policy VOs ──
+
+    value_object "CurationTier" do
+      # The four-tier curation decision. The Curate command writes
+      # one of these to its CurationDecided event ; Queue / Speak
+      # read it and route accordingly.
+      #   "always_speak"   — speak unconditionally (modulo Mute)
+      #   "usually_speak"  — speak unless rate-limited / mode says no
+      #   "summarize"      — collapse via Summarize, then re-Curate
+      #   "never_speak"    — record but never reach the adapter
+      attribute :value, String, enum: ["always_speak", "usually_speak", "summarize", "never_speak"]
+    end
+
+    value_object "Priority" do
+      # The Queue's priority band. The queue drains FIFO within
+      # band ; bands drain in this order :
+      #   "urgent"  — operator-attention errors, direct questions
+      #   "high"    — task completions, important responses
+      #   "normal"  — interpretation, observations, conversation
+      #   "ambient" — atmospheric notes, low-stakes color
+      attribute :value, String, enum: ["urgent", "high", "normal", "ambient"]
+    end
+
+    value_object "TagList" do
+      # Categorical tags attached to an utterance — used by Curate
+      # to weight the tier decision. Common values :
+      #   "response"       — direct reply to Chris
+      #   "error"          — needs operator action
+      #   "dream"          — boot-time dream report
+      #   "insight"        — reflective passage
+      #   "interpretation" — reading-the-room observation
+      #   "completion"     — task finished
+      #   "french"         — French phrase (always speak the music)
+      #   "breadcrumb"     — tool call trail (never speak)
+      #   "system"         — internal upsert / reminder (never speak)
+      # Stored as a comma-separated string for byte-equality across
+      # Ruby and Rust parsers ; the runtime splits on dispatch.
+      attribute :value, String
+    end
+
+    value_object "WordCount" do
+      # Word count of an utterance. The Curate command uses this
+      # as one input to the tier decision : over 200 → :summarize ;
+      # under 30 with response/insight tags → :always_speak.
+      attribute :value, Integer
+    end
+
+    value_object "UtteranceRef" do
+      # Stable identifier for one Utterance entity row. Convention :
+      # ISO-8601-compact timestamp with a 4-char random suffix, e.g.
+      # "20260514T203015-a7f2". Used to chain Curate → Queue → Speak
+      # → Replay against the same utterance.
+      attribute :value, String
+    end
+
+    value_object "ReasonText" do
+      # Free-form explanation attached to a Curate decision or
+      # Prioritize re-rank — e.g. "tier :always_speak — tagged
+      # :response, 18 words, direct Chris question" or "elevated
+      # from :normal to :urgent — Chris's follow-up arrived".
+      attribute :value, String
+    end
+
+    value_object "InvokerKind" do
+      # Which substrate actually rendered the utterance.
+      #   "tts_adapter"    — the :tts adapter family + ElevenLabs
+      #                      (target end state per i557 + i239)
+      #   "shell_bridge"   — ~/bin/miette-speak invocation
+      #                      (transitional, i238 deletion contract)
+      #   "macos_say"      — local fallback when the API fails
+      #                      or MIETTE_FALLBACK=1
+      #   "suppressed"     — rendered nothing (muted or never_speak)
+      # Captured on each Utterance for the audit trail.
+      attribute :value, String, enum: ["tts_adapter", "shell_bridge", "macos_say", "suppressed"]
+    end
+
+    # ── Session lifecycle ──
+
+    command "StartSession" do
+      role "System"
+      description "Reset per-session counters at runtime boot. The Voice keeps per-session tallies so observability surfaces (statusline, awareness dashboard) reflect what the current session has done, not lifetime totals. The Utterance entity collection is NOT reset — it's the audit trail that spans sessions."
+      attribute :name,               Name
+      attribute :session_started_at, Timestamp
+      then_set :name, to: :name
+      emits "SessionStarted"
+    end
+
+    # ── Voice configuration ──
+
+    command "SetVoice" do
+      role "Operator"
+      description "Switch the active ElevenLabs voice id and model. Used when an operator wants Miette to speak in a different timbre (e.g. a role-specific voice for narration vs conversation). Updates voice_id and model_id ; subsequent Speak commands route to the new voice. The :tts adapter reads the live values at dispatch time."
+      attribute :name,     Name
+      attribute :voice_id, VoiceId
+      attribute :model_id, ModelId
+      then_set :voice_id, to: :voice_id
+      then_set :model_id, to: :model_id
+      emits "VoiceChanged"
+    end
+
+    # ── Mute control ──
+
+    command "Mute" do
+      role "Operator"
+      description "Silence the voice. Subsequent Speak commands record their Utterance but do not render or play audio — the lifecycle transitions straight to :suppressed with reason :muted. Used when the operator needs quiet (focus, calls, sleep). Mute is the operator's veto over the curation policy ; even always_speak utterances stay silent under mute."
+      attribute :name, Name
+      then_set :mode, to: "muted"
+      emits "Muted"
+    end
+
+    command "Unmute" do
+      role "Operator"
+      description "Restore the voice to live operation. Subsequent Speak commands render and play normally. Does NOT speak the queued suppressed utterances — those stay suppressed in the audit trail. Replay can resurrect them on demand."
+      attribute :name, Name
+      then_set :mode, to: "live"
+      emits "Unmuted"
+    end
+
+    # ── The act : speak ──
 
     command "Speak" do
       role "System"
-      description "Miette speaks the given text aloud via the :tts adapter — renders, caches, plays."
-      attribute :text, String
-      then_set :last_text, to: :text
+      description "Miette speaks the given text aloud via the :tts adapter — renders via ElevenLabs, caches to ~/.config/miette/audio/miette_{utc}.mp3, plays via afplay. trigger_on 'Voice.Speak' in voice.hecksagon routes here. The transitional invoker today is ~/bin/miette-speak which the same kernel hook will replace once the i557 framework registry lands and the v1 stub at rust/src/runtime/tts_dispatcher.rs grows real ElevenLabs HTTP integration. last_text, last_spoke_at and last_audio_path update so awareness reads can surface what was just heard."
+      attribute :text,       UtteranceText
+      attribute :spoken_at,  Timestamp
+      attribute :audio_path, AudioPath
+      then_set :last_text,       to: :text
+      then_set :last_spoke_at,   to: :spoken_at
+      then_set :last_audio_path, to: :audio_path
       emits "Spoke"
+    end
+
+    # ── Queue control : speak with priority ──
+
+    command "Queue" do
+      role "System"
+      description "Add an utterance to the speak queue with a priority tier and tags. The queue drains FIFO within priority bands (urgent before high before normal before ambient). Used when multiple utterances arrive concurrently — Curate-then-Queue lets the policy weigh them before any one reaches ElevenLabs. The Utterance entity row carries the queued_at timestamp and lifecycle :queued."
+      attribute :utterance_id, UtteranceRef
+      attribute :text,         UtteranceText
+      attribute :priority,     Priority
+      attribute :tags,         TagList
+      attribute :queued_at,    Timestamp
+      emits "Queued"
+    end
+
+    command "Prioritize" do
+      role "System"
+      description "Re-rank a queued utterance when context changes — e.g. a new urgent input arrives and the previously-queued ambient observation should drop further back, or a follow-up Chris-question elevates a normal reply to urgent. Updates the Utterance entity's priority ; the next Speak picks the new top of the queue. Does NOT speak ; that's the next Speak dispatch."
+      attribute :utterance_id,      UtteranceRef
+      attribute :priority,          Priority
+      attribute :reprioritized_at,  Timestamp
+      attribute :reason,            ReasonText
+      emits "Reprioritized"
+    end
+
+    # ── The intelligent part : curation ──
+
+    command "Curate" do
+      role "System"
+      description "Decide whether a piece of text is worth speaking aloud given its tags and length. The single intelligent gate before anything reaches Speak. Returns one of four tiers : :always_speak (response to Chris, errors needing action, dreams, French) / :usually_speak (interpretation, task completion, short replies) / :summarize (>200 words → 1-2 sentence summary in a follow-up Curate / Speak chain) / :never_speak (tool breadcrumbs, internal upserts, system reminders, code, shell output). Updates utterances_considered ; emits CurationDecided so downstream listeners (Queue, Speak, the awareness stream) can react. The decision IS bluebook : tiers are VOs ; the policy that maps (text, tags, length) → tier is documented here and the runtime implements it as a deterministic function of the inputs."
+      attribute :utterance_id,    UtteranceRef
+      attribute :text,            UtteranceText
+      attribute :tags,            TagList
+      attribute :length_in_words, WordCount
+      attribute :tier,            CurationTier
+      attribute :decided_at,      Timestamp
+      attribute :reason,          ReasonText
+      emits "CurationDecided"
+    end
+
+    # ── Summarize : collapse long content before speaking ──
+
+    command "Summarize" do
+      role "System"
+      description "Collapse a long utterance into a short spoken summary. Dispatched after Curate returns :summarize for content over 200 words. The summarizer is the LLM via the :llm adapter family ; this command records the (original, summary, ratio) tuple so the audit trail captures what was elided. The summary becomes a new Utterance row that re-enters Curate (now sized to :usually_speak)."
+      attribute :original_utterance_id, UtteranceRef
+      attribute :summary_utterance_id,  UtteranceRef
+      attribute :summary_text,          UtteranceText
+      attribute :original_word_count,   WordCount
+      attribute :summary_word_count,    WordCount
+      attribute :summarized_at,         Timestamp
+      emits "Summarized"
+    end
+
+    # ── Replay : re-speak the last N utterances ──
+
+    command "Replay" do
+      role "Operator"
+      description "Re-speak a previously-spoken utterance by id. The Utterance entity row carries its audio_path ; the :tts adapter replays the cached file via afplay without re-rendering against ElevenLabs (no API call, no token cost). Used when Chris missed it the first time, or when an operator wants to hear a dream report or insight again. last_text and last_spoke_at update so the most-recent pointer reflects the replay."
+      attribute :utterance_id, UtteranceRef
+      attribute :replayed_at,  Timestamp
+      emits "Replayed"
+    end
+
+    # ── Entity — per-utterance audit + lifecycle ──
+
+    entity "Utterance" do
+      description "One thing Miette considered saying. Created when Curate decides the tier, transitioned to :queued when Queue accepts it, to :speaking when Speak fires, to :spoken when the adapter completes, to :suppressed when curation or Mute prevents it. Carries the curation reason, the audio path (when rendered), the invoker kind (which substrate did the work), and timestamps for each lifecycle transition. The audit trail of every utterance Miette has been part of."
+      attribute :utterance_id,  UtteranceRef
+      attribute :text,          UtteranceText
+      attribute :tags,          TagList
+      attribute :priority,      Priority
+      attribute :tier,          CurationTier
+      attribute :word_count,    WordCount
+      attribute :reason,        ReasonText
+      attribute :curated_at,    Timestamp
+      attribute :queued_at,     Timestamp
+      attribute :spoken_at,     Timestamp
+      attribute :suppressed_at, Timestamp
+      attribute :audio_path,    AudioPath
+      attribute :invoker,       InvokerKind
     end
   end
 end
