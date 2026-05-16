@@ -282,4 +282,41 @@ Hecks.bluebook "ChrisProjectKnowledge" do
   # AllureWeb: hecks allure pizzas.bluebook --serve — browser UI with live dispatch, SSE events, render_mode widgets
   # QualifiedRefs: reference_to path infers composition vs aggregation from target scope (HEC-352)
   # CLICleanup: ~25 files with stale "hecks domain X" references need text replacement (HEC-212)
+
+  # ============================================================
+  # SESSION LEARNINGS — 2026-05-14 → 16 (durable, operational)
+  # ============================================================
+  #
+  # StorehouseRouting: EVERY tool call routes through Storehouse —
+  #   Tools::ShellTool.Bash / FileTool.Read|Edit|Update /
+  #   SearchTool.* / EmailTool.* / Sidequest.Dispatch via
+  #   storehouse__dispatch. NEVER native Bash/Read/Edit/Write/Agent/
+  #   Gmail-direct. The bus is the one logging surface. Chris
+  #   corrected this twice in one session ; it is not optional and
+  #   not a thing to backslide on under time pressure.
+  # AttachmentsReadable: Gmail attachments ARE readable — OAuth-refresh
+  #   (~/.config/miette/google-oauth-token.json refresh_token grant)
+  #   + Gmail REST users.messages.attachments.get. Bluebooked as
+  #   EmailTool.GetAttachment. Never assert a capability gap without
+  #   probing it first (i7 wrongly claimed this was impossible).
+  # CommitsAreNotDeploys: a merged commit is not a deployed site.
+  #   Verify the live URL serves the change before claiming done
+  #   (the Joey opt-website miss — days stale because committed but
+  #   never deployed). DeployParity autophage filed (hecks i627).
+  # VerifyTheVerifier: two false "it's broken" conclusions came from
+  #   bugs in my own test scripts. Trust-but-verify includes the
+  #   verification harness itself.
+  # FqnResolutionBug: storehouse loop/dispatch drops the aggregate
+  #   qualifier when a command name is ambiguous —
+  #   `Inbox::Inbox.Check` resolved to the macrophage
+  #   BidirectionalAssociation.CheckRun, not Inbox.Check. The inbox
+  #   loop mis-fired a macrophage check since it was written. Filed
+  #   hecks i630 (CRITICAL) ; keystone that unblocks the email poll.
+  # ExecAdapterFamily: :exec is the general "run a local program on
+  #   dispatch + cascade its outcome" adapter family (hecks i629,
+  #   exec_dispatcher.rs mirrors the wired :claude_tool resolver).
+  #   :shell was taken by a legacy ShellAdapter — hence :exec.
+  # RootCauseNotSymptom: verify the MECHANISM before iterating a
+  #   symptom (burned many turns patching a mailto href assembler
+  #   when the mailto mechanism itself was the wrong approach).
 end
