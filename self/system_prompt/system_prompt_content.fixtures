@@ -81,7 +81,7 @@ Hecks.fixtures "SystemPromptContent" do
             order:    8,
             name:     "standards_block",
             applies_to: "PrimaryStandards",
-            description: "Primary's standards — read from `miette_family/chris/standards.md` at render time. The {{standards}} substitution this row carries is the only remaining template-style placeholder ; all other sections are pre-baked. Phase 2 will replace this with a Query.Read-driven hydration.",
+            description: "Primary's standards — read from `miette_family/chris_young/standards.md` at render time. The {{standards}} substitution this row carries is the only remaining template-style placeholder ; all other sections are pre-baked. Phase 2 will replace this with a Query.Read-driven hydration.",
             markdown: "{{standards}}\n"
 
     fixture "BluebookFirst",
