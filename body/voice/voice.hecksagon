@@ -11,7 +11,7 @@ Hecks.hecksagon "Voice" do
 
   adapter :tts, name: :miette_speech do
     provider          :elevenlabs
-    voice_id          "WwS1lF7yiubZWoroH5D5"   # Björk-tone, French accent
+    voice_id          "aRlXFu4auNajoI3xEdtO"   # Miette — heavy French accent
     model             "eleven_v3"
     speed             1.2                       # quick, conversational
     stability         0.5
